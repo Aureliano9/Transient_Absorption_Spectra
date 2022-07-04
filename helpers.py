@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import math
 import sys
 import keyboard
+from scipy.optimize import curve_fit
 
 cdict = {'red': ((0.0, 0.0, 0.0),
                  (0.1, 0.5, 0.5),
@@ -39,7 +40,7 @@ my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
 def plot_color(w, t, dA, current_w, current_t, w_bounds=None, t_bounds=None):
     plt.figure()
-    plt.pcolor(w, t, dA, cmap=my_cmap)
+    plt.pcolor(w, t, dA, vmin=-.001, vmax=.003, cmap=my_cmap)
     plt.xlabel("Wavelength")
     plt.ylabel("Time")
     plt.colorbar()
@@ -111,3 +112,30 @@ def readFile(filename):
 
 def find_index(arr, value):
     return np.argmin(np.abs(arr-value))
+
+def heaviside(x, shift, magnitude):
+    return magnitude * np.heaviside(x,shift)
+
+def fit_heaviside(x,y):
+    cleaned_x = x[~np.isnan(y)]
+    cleaned_y = y[~np.isnan(y)]
+    
+    popt, pcov = curve_fit(heaviside, cleaned_x, cleaned_y)
+    best_shift = popt[0]
+    best_magnitude = popt[1]
+    
+    return best_shift
+
+def quadratic(x, a, b, c):
+    return a*x**2 + b*x + c
+
+def fit_quadratic(x,y):
+    cleaned_x = x[~np.isnan(y)]
+    cleaned_y = y[~np.isnan(y)]
+    
+    popt, pcov = curve_fit(quadratic, cleaned_x, cleaned_y)
+    a = popt[0]
+    b = popt[1]
+    c = popt[2]
+    
+    return (a,b,c)

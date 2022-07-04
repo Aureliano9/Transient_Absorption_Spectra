@@ -15,41 +15,66 @@ import keyboard
 import helpers
 
 # PARAMETERS
-pump_off_filename = "continuum spectrum_channel1 raw Pump off.csv"
-pump_on_filename = "continuum spectrum_channel1 raw Pump on.csv"
-subtract_surface_file = "continuum spectrum_channel1 raw Pump on.csv"
-time_zero_correction = (0,50) #time units
+# if supplying pump off/on files
+pump_off_filename = None
+pump_on_filename = None
+# if supplying delta A file
+delta_A_filenames = ["sample1/CudmpDPEphosBF4ACN_1_scan1.csv"]
+subtract_surface_file = None
+time_zero_correction = (-100,-.5) #time units
 
 # READ IN DATA
-wavelengths_off, times_off, pump_off = helpers.readFile(pump_off_filename)
-wavelengths_on, times_on, pump_on = helpers.readFile(pump_on_filename)
-if not np.allclose(wavelengths_off,wavelengths_on) or not np.allclose(times_off,times_on):
-    print("Pump off and pump on raw data does not have matching axes")
-    sys.exit()
-delta_A = np.log(pump_off/pump_on)
-wavelengths = wavelengths_on
-times = times_on
+if pump_off_filename!=None and pump_on_filename!=None:
+    wavelengths_off, times_off, pump_off = helpers.readFile(pump_off_filename)
+    wavelengths_on, times_on, pump_on = helpers.readFile(pump_on_filename)
+    if not np.allclose(wavelengths_off,wavelengths_on) or not np.allclose(times_off,times_on):
+        print("Pump off and pump on raw data does not have matching axes")
+        sys.exit()
+    delta_A = np.log(pump_off/pump_on)
+    wavelengths = wavelengths_on
+    times = times_on
+elif len(delta_A_filenames)!=0:
+    delta_As = []
+    for filename in delta_A_filenames:
+        wavelengths, times, delta_A = helpers.readFile(filename)
+        delta_As.append(delta_A)
+    delta_As = np.array(delta_As)
+    delta_A = np.average(delta_As, axis=0)
 
 # SUBTRACT SURFACE IF NEEDED
 if subtract_surface_file!=None:
     wavelengths_subtract, times_subtract, subtract_surface = helpers.readFile(subtract_surface_file)
     delta_A -= subtract_surface
-
-# REMOVE NAN OR INVALID VALUES
-delta_A = np.nan_to_num(delta_A)
     
-# TIME ZERO CORRECTION
-time_zero_index = (helpers.find_index(times,time_zero_correction[0]),helpers.find_index(times,time_zero_correction[1]))
-time_zero_avg = np.average(delta_A[time_zero_index[0]:time_zero_index[1]+1,:], axis=0)
-delta_A -= time_zero_avg
+
 
 # RECORD KEEPING
-wavelength_index = len(wavelengths)//2
-time_index = len(times)//2
+wavelength_index = helpers.find_index(wavelengths, (wavelengths.min()+wavelengths.max())/2)
+time_index = helpers.find_index(times, (times.min()+times.max())/2)
 wavelength_bounds = [np.min(wavelengths),np.max(wavelengths)]
 time_bounds = [np.min(times),np.max(times)]
 
-helpers.plot_color(wavelengths, times, delta_A, wavelengths[wavelength_index], times[time_index])
+# TIME ZERO CORRECTION
+# time_zero_index = (helpers.find_index(times,time_zero_correction[0]),helpers.find_index(times,time_zero_correction[1]))
+# print(time_zero_index)
+# masked_data = np.ma.masked_array(delta_A, np.isnan(delta_A))[time_zero_index[0]:time_zero_index[1]+1,:]
+# time_zero_avg = np.average(delta_A[time_zero_index[0]:time_zero_index[1]+1,:], axis=0, weights=masked_data)
+# delta_A -= time_zero_avg
+
+helpers.plot_crosssection(wavelengths,times,delta_A,wavelength_index,False)
+
+# shifts = []
+# for i in range(len(wavelengths)):
+#     shifts.append(helpers.fit_heaviside(times,delta_A[:,i]))
+# shifts = np.array(shifts)
+# a,b,c = helpers.fit_quadratic(times, shifts)
+# fitted = []
+# for time in times:
+#     fitted.plot(helpers.quadratic(time,a,b,c))
+# fitted = np.array(fitted)
+# plt.figure()
+# plt.plot(times,fitted)
+# plt.show()
 
 # LIVE INTERACTION
 while True:
@@ -59,12 +84,16 @@ while True:
         break
     elif action=="wc":
         print("changing wavelength value...")
-        desired_wavelength = float(input("Enter new wavelength: "))
-        wavelength_index = np.find_index(wavelengths,desired_wavelength)
+        desired_wavelength = input("Enter new wavelength: ")
+        if desired_wavelength!="":
+            desired_wavelength = float(desired_wavelength)
+            wavelength_index = helpers.find_index(wavelengths,desired_wavelength)
     elif action=="tc":
         print("changing time value...")
-        desired_time = float(input("Enter new time: "))
-        time_index = np.find_index(times,desired_time)
+        desired_time = input("Enter new time: ")
+        if desired_time!="":
+            desired_time = float(desired_time)
+            time_index = helpers.find_index(times,desired_time)
     elif action=="wp":
         print("plotting wavelength plot...")
         helpers.plot_crosssection(wavelengths,times,delta_A,time_index,True,wavelength_bounds)
