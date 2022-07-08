@@ -19,14 +19,15 @@ import helpers
 pump_off_filename = None
 pump_on_filename = None
 # if supplying delta A file
-delta_A_filenames = ["sample1/CudmpDPEphosBF4ACN_1_scan1.csv"]
-subtract_surface_file = None
+delta_A_filenames = ["sample1/CudmpDPEphosBF4ACN_1_scan1.csv","sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
+subtract_surface_file = None # toggle?
 time_zero_correction = (-100,-.5) #time units
+uniform_time_shift = 0
 
 # READ IN DATA
 if pump_off_filename!=None and pump_on_filename!=None:
-    wavelengths_off, times_off, pump_off = helpers.readFile(pump_off_filename)
-    wavelengths_on, times_on, pump_on = helpers.readFile(pump_on_filename)
+    wavelengths_off, times_off, pump_off = helpers.read_file(pump_off_filename)
+    wavelengths_on, times_on, pump_on = helpers.read_file(pump_on_filename)
     if not np.allclose(wavelengths_off,wavelengths_on) or not np.allclose(times_off,times_on):
         print("Pump off and pump on raw data does not have matching axes")
         sys.exit()
@@ -34,47 +35,35 @@ if pump_off_filename!=None and pump_on_filename!=None:
     wavelengths = wavelengths_on
     times = times_on
 elif len(delta_A_filenames)!=0:
-    delta_As = []
-    for filename in delta_A_filenames:
-        wavelengths, times, delta_A = helpers.readFile(filename)
-        delta_As.append(delta_A)
-    delta_As = np.array(delta_As)
-    delta_A = np.average(delta_As, axis=0)
+    if len(delta_A_filenames)==1:
+        wavelengths, times, delta_A = helpers.read_file(delta_A_filenames[0])
+    else:
+        delta_As = []
+        for filename in delta_A_filenames:
+            wavelengths, times, delta_A = helpers.read_file(filename)
+            delta_As.append(delta_A)
+        delta_A = np.array(delta_As)
+    # delta_A = delta_As[0,:,:]
 
 # SUBTRACT SURFACE IF NEEDED
 if subtract_surface_file!=None:
-    wavelengths_subtract, times_subtract, subtract_surface = helpers.readFile(subtract_surface_file)
+    wavelengths_subtract, times_subtract, subtract_surface = helpers.read_file(subtract_surface_file)
     delta_A -= subtract_surface
-    
-
 
 # RECORD KEEPING
-wavelength_index = helpers.find_index(wavelengths, (wavelengths.min()+wavelengths.max())/2)
-time_index = helpers.find_index(times, (times.min()+times.max())/2)
-wavelength_bounds = [np.min(wavelengths),np.max(wavelengths)]
-time_bounds = [np.min(times),np.max(times)]
+current_wavelength = helpers.avg(wavelengths.min(),wavelengths.max())
+current_time = helpers.avg(times.min(),times.max())
+wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
+time_bounds = (np.min(times),np.max(times))
+c_bounds = (None,None)
 
-# TIME ZERO CORRECTION
-# time_zero_index = (helpers.find_index(times,time_zero_correction[0]),helpers.find_index(times,time_zero_correction[1]))
-# print(time_zero_index)
-# masked_data = np.ma.masked_array(delta_A, np.isnan(delta_A))[time_zero_index[0]:time_zero_index[1]+1,:]
-# time_zero_avg = np.average(delta_A[time_zero_index[0]:time_zero_index[1]+1,:], axis=0, weights=masked_data)
-# delta_A -= time_zero_avg
+# CREATE COPY OF ORIGINAL FOR RESETTING
+original_delta_A = np.copy(delta_A)
+original_wavelengths = np.copy(wavelengths)
+original_times = np.copy(times)
 
-helpers.plot_crosssection(wavelengths,times,delta_A,wavelength_index,False)
-
-# shifts = []
-# for i in range(len(wavelengths)):
-#     shifts.append(helpers.fit_heaviside(times,delta_A[:,i]))
-# shifts = np.array(shifts)
-# a,b,c = helpers.fit_quadratic(times, shifts)
-# fitted = []
-# for time in times:
-#     fitted.plot(helpers.quadratic(time,a,b,c))
-# fitted = np.array(fitted)
-# plt.figure()
-# plt.plot(times,fitted)
-# plt.show()
+# # DISPLAY COLOR PLOT FIRST
+# helpers.plot_color(wavelengths, times, delta_A, wavelengths[wavelength_index], times[time_index], w_bounds=wavelength_bounds, t_bounds=time_bounds, c_bounds=c_bounds)
 
 # LIVE INTERACTION
 while True:
@@ -84,45 +73,55 @@ while True:
         break
     elif action=="wc":
         print("changing wavelength value...")
-        desired_wavelength = input("Enter new wavelength: ")
-        if desired_wavelength!="":
-            desired_wavelength = float(desired_wavelength)
-            wavelength_index = helpers.find_index(wavelengths,desired_wavelength)
+        new_w = helpers.ask_value(float, "wavelength")
+        if new_w!=None:
+            current_wavelength = new_w
     elif action=="tc":
         print("changing time value...")
-        desired_time = input("Enter new time: ")
-        if desired_time!="":
-            desired_time = float(desired_time)
-            time_index = helpers.find_index(times,desired_time)
+        new_t = helpers.ask_value(float, "time")
+        if new_t!=None:
+            current_time = new_t
     elif action=="wp":
         print("plotting wavelength plot...")
-        helpers.plot_crosssection(wavelengths,times,delta_A,time_index,True,wavelength_bounds)
+        if delta_A.ndim==2:
+            helpers.plot_crosssection(wavelengths,times,delta_A,current_time,True,wavelength_bounds)
+        elif delta_A.ndim==3:
+            print("still have not taken average")
+            display_index = helpers.ask_value(int, override_text="What layer would you like to display? ")
+            helpers.plot_crosssection(wavelengths,times,delta_A[display_index,:,:],current_time,True,wavelength_bounds)
     elif action=="tp":
         print("plotting time plot...")
-        helpers.plot_crosssection(wavelengths,times,delta_A,wavelength_index,False)
+        if delta_A.ndim==2:
+            helpers.plot_crosssection(wavelengths,times,delta_A,current_wavelength,False,time_bounds)
+        elif delta_A.ndim==3:
+            print("still have not taken average")
+            display_index = helpers.ask_value(int, override_text="What layer would you like to display? ")
+            helpers.plot_crosssection(wavelengths,times,delta_A[display_index,:,:],current_wavelength,False,time_bounds)
     elif action=="cp":
         print("plotting color plot...")
-        helpers.plot_color(wavelengths, times, delta_A, wavelengths[wavelength_index], times[time_index], w_bounds=wavelength_bounds, t_bounds=time_bounds)
+        if delta_A.ndim==2:
+            helpers.plot_color(wavelengths, times, delta_A, current_wavelength, current_time, w_bounds=wavelength_bounds, t_bounds=time_bounds, c_bounds=c_bounds)
+        elif delta_A.ndim==3:
+            print("still have not taken average")
+            display_index = helpers.ask_value(int, override_text="What layer would you like to display? ")
+            if display_index!=None and display_index<delta_A.shape[0]:
+                helpers.plot_color(wavelengths, times, delta_A[display_index,:,:], current_wavelength, current_time, w_bounds=wavelength_bounds, t_bounds=time_bounds, c_bounds=c_bounds)
+            else:
+                print("Invalid index. Index ranges from 0 to " + str(delta_A.shape[0]-1))
     elif action=="waxis":
         print("changing wavelength axis...")
-        wavelength_min = input("Enter new min: ")
-        if wavelength_min!="":
-            wavelength_bounds[0] = float(wavelength_min)
-        wavelength_max = float(input("Enter new max: "))
-        if wavelength_max!="":
-            wavelength_bounds[1] = float(wavelength_max)
+        wavelength_bounds = helpers.ask_range(float, default = wavelength_bounds)
     elif action=="taxis":
         print("changing time axis...")
-        time_min = input("Enter new min: ")
-        if time_min!="":
-            time_bounds[0] = float(time_min)
-        time_max = input("Enter new max: ")
-        if time_max!="":
-            time_bounds[1] = float(time_max)
-    elif action=="reset":
+        time_bounds = helpers.ask_range(float, default = time_bounds)
+    elif action=="caxis":
+        print("changing color axis...")
+        c_bounds = helpers.ask_range(float, default = c_bounds)
+    elif action=="reset axis":
         print("reseting axis...")
-        wavelength_bounds = [np.min(wavelengths),np.max(wavelengths)]
-        time_bounds = [np.min(times),np.max(times)]
+        wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
+        time_bounds = (np.min(times),np.max(times))
+        c_bounds = (None,None)
     elif action=="play":
         print("playing with time...")
         for i in range(len(times)):
@@ -130,14 +129,97 @@ while True:
         repeat_flag = input("Repeat? (y/n)")
         if repeat_flag!="y":
             break
+    # MUTATING DATA
+    elif action=="avg":
+        delta_A = np.nanmean(delta_A, axis=0)
+    elif action=="shift time":
+        uniform_time_shift = helpers.ask_value(float, default=0)
+        times += uniform_time_shift
+        time_bounds = (time_bounds[0]+uniform_time_shift,time_bounds[1]+uniform_time_shift)
     elif action=="cut w":
-        print("cutting wavelength range...")
-        cut_min = float(input("Enter min of cut range: "))
-        cut_max = float(input("Enter max of cut range: "))
+        print("cutting wavelength range...") # ask user nan/delete
+        cut_min, cut_max = helpers.ask_range(float)
         cut_min_index = helpers.find_index(wavelengths, cut_min)
         cut_max_index = helpers.find_index(wavelengths, cut_max)
-        delta_A[:,cut_min_index:cut_max_index+1] = 0
+        if delta_A.ndim == 2:
+            delta_A = np.concatenate((delta_A[:,:cut_min_index],delta_A[:,cut_max_index:]), axis=1)
+        elif delta_A.ndim == 3:
+            delta_A = np.concatenate((delta_A[:,:,:cut_min_index],delta_A[:,:,cut_max_index:]), axis=2)
+        wavelengths = np.concatenate((wavelengths[:cut_min_index],wavelengths[cut_max_index:]))
+    elif action=="spikes":
+        print("removing spikes...")
+        width = helpers.ask_value(int,"width for spikes")
+        factor = helpers.ask_value(float, "number of standard deviations allowed")
+        if width!=None and factor!=None:
+            delta_A = helpers.remove_spikes(delta_A, width, factor)
+    # elif action=="nan":
+    #     print("removing nan values...")
+    #     delta_A = helpers.remove_nan(delta_A)
+    elif action=="nan w":
+        print("removing nan wavelength spectra...")
+        if delta_A.ndim==3:
+            print("Take avg first before removing spectra")
+        else:
+            print("Old dimension: " + str(delta_A.shape))
+            remove = []
+            for t in range(len(times)):
+                if np.any(np.isnan(delta_A[t,:])):
+                    remove.append(t)
+            remove.reverse()
+            for t in remove:
+                if t==len(times)-1:
+                    delta_A = delta_A[:t,:]
+                    times = times[:t]
+                else:
+                    delta_A = np.concatenate((delta_A[:t,:],delta_A[t+1:,:]),axis=0)
+                    times = np.concatenate((times[:t],times[t+1:]))
+            remove.clear()
+            print("New dimension: " + str(delta_A.shape))
+    elif action=="nan t":
+        print("removing nan time spectra...")
+        if delta_A.ndim==3:
+            print("Take avg first before removing spectra")
+        else:
+            remove = []
+            for w in range(len(wavelengths)):
+                if (delta_A.ndim==2 and np.any(np.isnan(delta_A[:,w]))) or (delta_A.ndim==3 and np.any(np.isnan(delta_A[:,:,w]))):
+                    remove.append(w)
+            remove.reverse()
+            for w in remove:
+                if w==len(times)-1:
+                    delta_A = delta_A[:,:,:w]
+                    wavelengths = wavelengths[:w]
+                else:
+                    delta_A = np.concatenate((delta_A[:,:w],delta_A[:,w+1:]),axis=0)
+                    wavelengths = np.concatenate((wavelengths[:w],wavelengths[w+1:]))
+            print("New dimension is " + str(delta_A.shape))
+    elif action=="spikes":
+        print("removing spike values...")
+        delta_A = helpers.remove_spikes(delta_A)
+    elif action=="background":
+        print("performing background correction...")
+        cont_flag = input("Warning: average was not taken yet. Continue? (y/n) ")
+        if cont_flag=="y":
+            back_min, back_max = helpers.ask_range(float)
+            if back_min!=None and back_max!=None:
+                background_index = (helpers.find_index(times,back_min),helpers.find_index(times,back_max))
+                if delta_A.ndim==2:
+                    delta_A -= np.nanmean(delta_A[background_index[0]:background_index[1],:],axis=0)
+                elif delta_A.ndim==3:
+                    background = np.nanmean(delta_A[:,background_index[0]:background_index[1],:],axis=1)
+                    for i in range(delta_A.shape[0]):
+                        delta_A[i,:,:] -= background[i,:]
+    elif action=="chirp":
+        print("performing chirp correction...")
+        delta_A = helpers.chirp_correction(times,wavelengths,delta_A)
+    elif action=="reset data":
+        print("reseting corrections...")
+        delta_A = original_delta_A
+        wavelengths = original_wavelengths
+        times = original_times
+        wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
+        time_bounds = (np.min(times),np.max(times))
+        c_bounds = (None,None)
     else:
         print("error, did not recognize command")
     
-# adjust wavelength range
