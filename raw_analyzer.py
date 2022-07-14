@@ -56,6 +56,22 @@ original_delta_A = np.copy(delta_A)
 original_wavelengths = np.copy(wavelengths)
 original_times = np.copy(times)
 
+alpha = 1
+omega = 1
+beta = 1
+tau = 1000
+tau_gvd = 1000
+S = 2*np.log(1+alpha*omega/(beta*tau**2*tau_gvd)*(times*np.exp(-2*times**2/tau**2)-(times-tau_gvd)*np.exp(-2*(times-tau_gvd)**2/tau**2)))
+plt.figure()
+plt.plot(times,S)
+plt.show()
+
+tau_pr = 300; # enter probe pulse duration [fs]
+beta = 1*10^(-3); # enter chirp rate [fs^2]
+tau_p = 100; # enter pump pulse duration [fs]
+D0 = 1
+St = D0*exp(-(x+t0)^2/tau_p^2)*sin(1/(2*beta*tau_p^2)-((x+t0)^2/(beta*tau_p^4))-((x+t0)*t0/(beta*tau_p^2*taupr^2)))
+
 # MENU
 menu = {}
 menu["q"] = "quit"

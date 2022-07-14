@@ -1,0 +1,48 @@
+ProbeVSHorizontal
+	a = 6.52944
+	b = 198.49146
+	c = 218.93036
+	d = 18.20977
+Width from Raw Data: 88.19200000000001 microns
+Theoretical Width: 77.1721344746351 microns
+
+ProbeVSVertical
+	a = 3.71718
+	b = 198.55225
+	c = 342.65164
+	d = 13.92359
+Width from Raw Data: 63.69399999999996 microns
+Theoretical Width: 57.475773103891214 microns
+
+PumpVSHorizontal
+	a = 2.04639
+	b = 184.91352
+	c = 437.38320
+	d = 31.03770
+Width from Raw Data: 127.38899999999995 microns
+Theoretical Width: 126.43227443033697 microns
+
+PumpVSVertical
+	a = 2.09496
+	b = 182.38204
+	c = 712.65210
+	d = 43.12089
+Width from Raw Data: 181.284 microns
+Theoretical Width: 175.77852319015443 microns
+
+Pump&ProbeVSHorizontal
+	a = 2.80266
+	b = 269.61940
+	c = 497.88425
+	d = 30.62365
+Width from Raw Data: 127.38799999999998 microns
+Theoretical Width: 124.60383823552809 microns
+
+Pump&ProbeVSVertical
+	a = 3.50309
+	b = 253.60382
+	c = 500.50726
+	d = 34.71110
+Width from Raw Data: 156.786 microns
+Theoretical Width: 142.06130147245867 microns
+
