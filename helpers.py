@@ -88,28 +88,34 @@ def read_file(filename):
     # opening the CSV file
     with open(filename, mode ='r')as file:
        
-      # reading the CSV file
-      csvFile = csv.reader(file)
+      if filename[-3:]=="dat":
+          lines = file.readlines()
+      else:
+          # reading the CSV file
+          lines = csv.reader(file)
      
       # displaying the contents of the CSV file
       row_counter = 0
-      for lines in csvFile:
+      for line in lines:
           column_counter = 0
           
-          #break condition
-          if len(lines)==1:
-              break
+          if filename[-3:]=="dat":
+              line = line.split("\t")
           
-          for line in lines:
+          #break condition
+          if len(line)==1:
+              break
+            
+          for el in line:
               if row_counter == 0:
                   if column_counter>0:
-                      times.append(float(line))
+                      times.append(float(el))
               else:
                   if column_counter==0:
-                      wavelengths.append(float(line))
+                      wavelengths.append(float(el))
                       signal_row = []
                   else:
-                      signal_row.append(float(line))
+                      signal_row.append(float(el))
               column_counter += 1
           if row_counter>0:
               signal.append(signal_row)
@@ -118,6 +124,9 @@ def read_file(filename):
     wavelengths = np.array(wavelengths)
     times = np.array(times)
     signal = np.array(signal).transpose()
+    
+    if filename[-3:]=="dat":
+        return (times,wavelengths,signal.transpose())
     
     return (wavelengths,times,signal)
 
@@ -218,16 +227,16 @@ def ask_range(type, default=(None,None)):
         max_value = type(max_value)
     return (min_value, max_value)
 
-def remove_nan(delta_A):
-    num_t, num_w = delta_A.shape
-    for w in range(num_w):
-            for t in range(num_t):
-                if np.isnan(delta_A[t,w]):
-                    if w-1>=0 and w+1<num_w and not np.isnan(delta_A[t,w-1]) and not np.isnan(delta_A[t,w+1]):
-                        delta_A[t,w] = (delta_A[t,w-1] + delta_A[t,w+1]) / 2.
-                    if t-1>=0 and t+1<num_t and not np.isnan(delta_A[t-1,w]) and not np.isnan(delta_A[t+1,w]):
-                        delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
-    return delta_A
+# def remove_nan(delta_A):
+#     num_t, num_w = delta_A.shape
+#     for w in range(num_w):
+#             for t in range(num_t):
+#                 if np.isnan(delta_A[t,w]):
+#                     if w-1>=0 and w+1<num_w and not np.isnan(delta_A[t,w-1]) and not np.isnan(delta_A[t,w+1]):
+#                         delta_A[t,w] = (delta_A[t,w-1] + delta_A[t,w+1]) / 2.
+#                     if t-1>=0 and t+1<num_t and not np.isnan(delta_A[t-1,w]) and not np.isnan(delta_A[t+1,w]):
+#                         delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
+#     return delta_A
 
 def remove_spikes(delta_A, width, factor):
     half_width = int(width/2);
@@ -240,5 +249,7 @@ def remove_spikes(delta_A, width, factor):
                 delta_A[t,w] = float("nan")
     return delta_A
 
-def gaussian(x, sigma, mu):
-    return np.exp(-.5*(x-mu)**2/sigma**2)/(sigma*math.sqrt(2*math.pi))
+def gaussian(x, sigma):
+    g = np.exp(-x**2/(2*sigma**2))/(sigma*math.sqrt(2*math.pi))
+    g /= np.trapz(g)
+    return g
