@@ -64,7 +64,7 @@ def gaussian_width(a,b,c,d):
 ## ENTER INFO ##
 #Fill Filename
 filename = 'ProbeVSHorizontal.csv'
-numberOfLinesToSkip = 5
+numberOfLinesToSkip = 5 #specify number of header lines (not data)
 #Gaussian Fit Values
 a = 6.52944
 b = 198.49146
@@ -72,8 +72,6 @@ c = 218.93036
 d = 18.20977
 
 #Set Flags
-gaussian_flag = False
-raw_e_sq_flag = False
 subtract_noise_flag = True
 noise_range = 20
 
