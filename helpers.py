@@ -103,7 +103,7 @@ def read_file(filename):
               line = line.split("\t")
           
           #break condition
-          if len(line)==1:
+          if len(times)>0 and len(line)<len(times):
               break
             
           for el in line:

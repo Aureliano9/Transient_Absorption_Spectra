@@ -22,8 +22,8 @@ from scipy.optimize import curve_fit
 pump_off_filename = None
 pump_on_filename = None
 # if supplying delta A file
-delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
-subtract_surface_files = ["Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
+delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv", "Data (1)/CudmpDPEphosBF4ACN_1_scan2.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
+subtract_surface_files = ["Data (1)/Acetonitrile.csv","Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
 # time_zero_correction = (-100,-.5) #time units
 
 # READ IN DATA
@@ -269,8 +269,8 @@ while True:
                 for i in range(len(times_subtract)):
                     delta_A_index = helpers.find_index(times, times_subtract[i])
                     if delta_A.ndim==3:
-                        for i in range(3):
-                            delta_A[i,delta_A_index,:] -= (Es*f/Er) * subtract_surface[i,:]
+                        for dim_i in range(3):
+                            delta_A[dim_i,delta_A_index,:] -= (Es*f/Er) * subtract_surface[i,:]
                     else:
                         delta_A[delta_A_index,:] -= (Es*f/Er) * subtract_surface[i,:]
             else:
