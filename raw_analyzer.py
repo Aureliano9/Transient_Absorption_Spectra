@@ -15,13 +15,15 @@ import keyboard
 import helpers
 import os
 
+from scipy.optimize import curve_fit
+
 # PARAMETERS
 # if supplying pump off/on files
 pump_off_filename = None
 pump_on_filename = None
 # if supplying delta A file
-delta_A_filenames = ["sample1/CudmpDPEphosBF4ACN_1_scan1.csv","sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
-subtract_surface_files = ["Four approaches for XPM treatment/Acetonitrile_scan1_RAW_pumped signal.dat"] # toggle?
+delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
+subtract_surface_files = ["Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
 # time_zero_correction = (-100,-.5) #time units
 
 # READ IN DATA
@@ -44,6 +46,9 @@ elif len(delta_A_filenames)!=0:
             delta_As.append(delta_A)
         delta_A = np.array(delta_As)
 
+# speed_of_light = 2.99792458e5
+# wavelengths = speed_of_light/wavelengths
+
 # RECORD KEEPING
 current_wavelength = helpers.avg(wavelengths.min(),wavelengths.max())
 current_time = helpers.avg(times.min(),times.max())
@@ -56,6 +61,71 @@ original_delta_A = np.copy(delta_A)
 original_wavelengths = np.copy(wavelengths)
 original_times = np.copy(times)
 
+
+precision = .001
+t_eval = np.arange(-.4, .6, precision)
+def kovalenko(times, beta, tau1, beta_tau2_sq, D0):
+    # beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
+    # tau1 = 50e-3 #ps  ##???
+    # # beta_tau1 = 2.2;
+    # beta_tau2_sq = 42;
+    # D0 = 1
+    target_wavelength = 400 ### ADJUST
+    center_wavelength = 460 # nm ##???
+    speed_of_light = 2.99792458e5 # nm / ps
+    omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
+    Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
+    t0 = (omega2-Omega2)/(2*beta)# frequency dependent
+    return D0*np.exp(-(times+t0)**2/tau1**2)*np.sin(1/(2*beta*tau1**2)-((times+t0)**2/(beta*tau1**4))-((times+t0)*t0/(beta_tau2_sq*tau1**2)))
+# target_wavelengths = [400,450,500,550,600,650,700,750] # nm
+# for target_wavelength in target_wavelengths:
+#     Sk = kovalenko(t_eval, target_wavelength)
+#     plt.figure()
+#     plt.plot(t_eval,Sk)
+#     plt.title("Kovalenko: Wavelength = "+ str(target_wavelength))
+#     plt.show()
+
+def ours(times, c1, c2, c3):
+    beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
+    tau1 = 50e-3 #ps  ##???
+    target_wavelength = 400 #### ADJUST
+    center_wavelength = 460 # nm ##???
+    speed_of_light = 2.99792458e5 # nm / ps
+    omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
+    Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
+    t0 = (omega2-Omega2)/(2*beta)# frequency dependent
+    # c1 = t0/(2*beta)
+    # c2 = t0/(2*beta)
+    # c3 = -1/(4*beta)
+    return np.exp(-(times+t0)**2/tau1**2)*(c1-c2*2*(times+t0)/tau1**2-c3*(2/tau1**2-4*(times+t0)**2/tau1**4))
+
+# for target_wavelength in target_wavelengths:
+#     So = ours(t_eval, target_wavelength)
+#     plt.figure()
+#     plt.plot(t_eval,So)
+#     plt.title("Ours: Wavelength = "+ str(target_wavelength))
+#     plt.show()
+
+# popt, pcov = curve_fit(kovalenko, times, delta_A[:,helpers.find_index(wavelengths,400)], [163, 50e-3, 42, .001])
+# print(popt)
+# fitted = kovalenko(times, popt[0], popt[1], popt[2], popt[3])
+# plt.figure()
+# plt.plot(times, delta_A[:,helpers.find_index(wavelengths,400)])
+# plt.plot(times, fitted)
+# plt.show()
+
+# def lorenc(times):
+#     alpha = 1
+#     omega = 1
+#     beta = 1.7e-3 * 10**6
+#     tau = 50e-3
+#     tau_gvd = 150e-3 #fs
+#     return 2*np.log(1+alpha*omega/(beta*tau**2*tau_gvd)*(times*np.exp(-2*times**2/tau**2)-(times-tau_gvd)*np.exp(-2*(times-tau_gvd)**2/tau**2)))
+# Sl = lorenc(t_eval)
+# plt.figure()
+# plt.plot(t_eval,Sl)
+# plt.title("Lorenc")
+# plt.show()
 
 # MENU
 menu = {}
@@ -162,6 +232,13 @@ while True:
         repeat_flag = input("Repeat? (y/n)")
         if repeat_flag!="y":
             break
+    elif action=="t peak":
+        print("Find peak in given range")
+        time_min_index = helpers.find_index(times,time_bounds[0])
+        time_max_index = helpers.find_index(times,time_bounds[1])
+        wavelength_index = helpers.find_index(wavelengths,current_wavelength)
+        peak_index = time_min_index + np.argmax(delta_A[time_min_index:time_max_index,wavelength_index])
+        print("Peak at time: ", times[peak_index])
     # MUTATING DATA
     elif action=="subtract":
         # SUBTRACT SURFACE IF NEEDED
@@ -180,11 +257,15 @@ while True:
             wavelengths_subtract, times_subtract, subtract_surface = helpers.read_file(subtract_surface_file)
             print("Original shape:", delta_A.shape)
             print("Subtract shape:", subtract_surface.shape)
-            Es = helpers.ask_value(float, default=None, override_text="Energy for subtract surface: ")
-            Er = helpers.ask_value(float, default=None, override_text="Energy for original surface: ")
+            Er = helpers.ask_value(float, default=None, override_text="Energy for subtract surface: ") #650
+            Es = helpers.ask_value(float, default=None, override_text="Energy for original surface: ") #500
             f = helpers.ask_value(float, default=None, override_text="Fraction f: ")
             
+            print(min(wavelengths_subtract),max(wavelengths_subtract))
+            print(min(times_subtract),max(times_subtract))
+            
             if Es!=None and Er!=None and f!=None:
+                # subtract surface 
                 for i in range(len(times_subtract)):
                     delta_A_index = helpers.find_index(times, times_subtract[i])
                     if delta_A.ndim==3:
@@ -193,10 +274,10 @@ while True:
                     else:
                         delta_A[delta_A_index,:] -= (Es*f/Er) * subtract_surface[i,:]
             else:
-                print("Enter valid value")
+                print("Error: Enter valid value")
                     
     elif action=="avg":
-        if delta_A.ndims==3:
+        if delta_A.ndim==3:
             delta_A = np.nanmean(delta_A, axis=0)
         else:
             print("only one file")
@@ -211,12 +292,12 @@ while True:
         cut_max_index = helpers.find_index(wavelengths, cut_max)
         nan_flag = input("replace with nan? otherwise, will delete. (y/n)")
         if nan_flag=="y":
-            if delta_A.ndims == 2:
+            if delta_A.ndim == 2:
                 delta_A[:,cut_min_index:cut_max_index] = np.NaN
-            elif delta_A.ndims == 3:
+            elif delta_A.ndim == 3:
                 delta_A[:,:,cut_min_index:cut_max_index] = np.NaN
             else:
-                print("ERROR: data has dimension", delta_A.ndims)
+                print("ERROR: data has dimension", delta_A.ndim)
                 os.abort()
         else:
             if delta_A.ndim == 2:
@@ -224,7 +305,7 @@ while True:
             elif delta_A.ndim == 3:
                 delta_A = np.concatenate((delta_A[:,:,:cut_min_index],delta_A[:,:,cut_max_index:]), axis=2)
             else:
-                print("ERROR: data has dimension", delta_A.ndims)
+                print("ERROR: data has dimension", delta_A.ndim)
                 os.abort()
         wavelengths = np.concatenate((wavelengths[:cut_min_index],wavelengths[cut_max_index:]))
     elif action=="spikes":
