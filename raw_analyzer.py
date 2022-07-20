@@ -25,8 +25,8 @@ from scipy.optimize import curve_fit
 pump_off_filename = None
 pump_on_filename = None
 # if supplying delta A file
-delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv", "Data (1)/CudmpDPEphosBF4ACN_1_scan2.csv"]  # ["Four approaches for XPM treatment/CudmpDPEphosBF4ACN_1_scan1.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
-subtract_surface_filenames = ["Data (1)/Acetonitrile.csv","Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
+delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv", "Data (1)/CudmpDPEphosBF4ACN_1_scan2.csv", "Four approaches for XPM treatment/CudmpDPEphosBF4ACN_1_scan1.csv"]  # ["Four approaches for XPM treatment/CudmpDPEphosBF4ACN_1_scan1.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
+ref_surface_filenames = ["Data (1)/Acetonitrile.csv","Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
 # time_zero_correction = (-100,-.5) #time units
 
 # # READ IN DATA
@@ -59,7 +59,7 @@ for filename in delta_A_filenames:
 
 # READ IN REFERENCE
 ref_surfaces = [] # each element is 3 items
-for filename in subtract_surface_filenames:
+for filename in ref_surface_filenames:
     ref_surfaces.append(DataObject.CreateFromFile(filename))
 
 
@@ -95,18 +95,18 @@ switched_data_ref = False;
 
 precision = .001
 t_eval = np.arange(-.4, .6, precision)
-def kovalenko(times, beta, tau1, beta_tau2_sq, D0):
+def kovalenko(times, beta, tau1, beta_tau2_sq, D0, t0):
     # beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
     # tau1 = 50e-3 #ps  ##???
     # # beta_tau1 = 2.2;
     # beta_tau2_sq = 42;
     # D0 = 1
-    target_wavelength = 400 ### ADJUST
-    center_wavelength = 460 # nm ##???
-    speed_of_light = 2.99792458e5 # nm / ps
-    omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
-    Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
-    t0 = (omega2-Omega2)/(2*beta)# frequency dependent
+    # target_wavelength = 400 ### ADJUST
+    # center_wavelength = 460 # nm ##???
+    # speed_of_light = 2.99792458e5 # nm / ps
+    # omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
+    # Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
+    # t0 = (omega2-Omega2)/(2*beta)# frequency dependent
     return D0*np.exp(-(times+t0)**2/tau1**2)*np.sin(1/(2*beta*tau1**2)-((times+t0)**2/(beta*tau1**4))-((times+t0)*t0/(beta_tau2_sq*tau1**2)))
 # target_wavelengths = [400,450,500,550,600,650,700,750] # nm
 # for target_wavelength in target_wavelengths:
@@ -116,15 +116,15 @@ def kovalenko(times, beta, tau1, beta_tau2_sq, D0):
 #     plt.title("Kovalenko: Wavelength = "+ str(target_wavelength))
 #     plt.show()
 
-def ours(times, c1, c2, c3):
-    beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
-    tau1 = 50e-3 #ps  ##???
-    target_wavelength = 400 #### ADJUST
-    center_wavelength = 460 # nm ##???
-    speed_of_light = 2.99792458e5 # nm / ps
-    omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
-    Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
-    t0 = (omega2-Omega2)/(2*beta)# frequency dependent
+def ours(times, c1, c2, c3, t0, tau1):
+    # beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
+    # tau1 = 50e-3 #ps  ##???
+    # target_wavelength = 400 #### ADJUST
+    # center_wavelength = 460 # nm ##???
+    # speed_of_light = 2.99792458e5 # nm / ps
+    # omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
+    # Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
+    # t0 = (omega2-Omega2)/(2*beta)# frequency dependent
     # c1 = t0/(2*beta)
     # c2 = t0/(2*beta)
     # c3 = -1/(4*beta)
@@ -137,21 +137,66 @@ def ours(times, c1, c2, c3):
 #     plt.title("Ours: Wavelength = "+ str(target_wavelength))
 #     plt.show()
 
-# popt, pcov = curve_fit(kovalenko, times, delta_A[:,helpers.find_index(wavelengths,400)], [163, 50e-3, 42, .001])
+# CREATE TEMP DATA
+temp_deltaA = ref_surfaces[1]
+temp_deltaA.signal[np.isnan(temp_deltaA.signal)] = 0
+
+wavelength_index = helpers.find_index(temp_deltaA.wavelengths,500)
+time_min_index = helpers.find_index(temp_deltaA.times,-1)
+time_max_index = helpers.find_index(temp_deltaA.times,2)
+times = temp_deltaA.times[time_min_index:time_max_index]
+sliced_signal = temp_deltaA.signal[time_min_index:time_max_index,wavelength_index]
+
+# FIT KOVALENKO
+# popt, pcov = curve_fit(kovalenko, times, sliced_signal, [3e3, 50e-3, 42, .006, .75])
 # print(popt)
-# fitted = kovalenko(times, popt[0], popt[1], popt[2], popt[3])
+# fitted = kovalenko(times, 1.7e3, 50e-3, 42, .006,.18)
+# fitted = kovalenko(times, *popt)
 # plt.figure()
-# plt.plot(times, delta_A[:,helpers.find_index(wavelengths,400)])
+# plt.plot(times, sliced_signal)
 # plt.plot(times, fitted)
 # plt.show()
 
-# def lorenc(times):
-#     alpha = 1
-#     omega = 1
-#     beta = 1.7e-3 * 10**6
-#     tau = 50e-3
-#     tau_gvd = 150e-3 #fs
-#     return 2*np.log(1+alpha*omega/(beta*tau**2*tau_gvd)*(times*np.exp(-2*times**2/tau**2)-(times-tau_gvd)*np.exp(-2*(times-tau_gvd)**2/tau**2)))
+# FIT OURS
+popt, pcov = curve_fit(ours, times, sliced_signal, [5.3e-5, 5.3e-5, -0.0001, .18, .0004])
+# print(popt)
+# fitted = ours(times, 5.3e-5, 5.3e-5, -0.0001, .7, .05)
+fitted = kovalenko(times, *popt)
+plt.figure()
+plt.plot(times, sliced_signal)
+plt.plot(times, fitted)
+plt.show()
+
+beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
+tau1 = 50e-3 #ps  ##???
+target_wavelength = 400 #### ADJUST
+center_wavelength = 460 # nm ##???
+speed_of_light = 2.99792458e5 # nm / ps
+omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
+Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
+t0 = (omega2-Omega2)/(2*beta)# frequency dependent
+c1 = t0/(2*beta)
+c2 = t0/(2*beta)
+c3 = -1/(4*beta)
+
+# FIT OURS
+popt, pcov = curve_fit(ours, times, sliced_signal, [3e3, 50e-3, 42, .006,.75])
+# print(popt)
+# fitted = kovalenko(times, 3e3, 50e-3, 42, .006,.75)
+fitted = ours(times, *popt)
+plt.figure()
+plt.plot(times, sliced_signal)
+plt.plot(times, fitted)
+plt.show()
+
+
+def lorenc(times):
+    alpha = 1
+    omega = 1
+    beta = 1.7e-3 * 10**6
+    tau = 50e-3
+    tau_gvd = 150e-3 #fs
+    return 2*np.log(1+alpha*omega/(beta*tau**2*tau_gvd)*(times*np.exp(-2*times**2/tau**2)-(times-tau_gvd)*np.exp(-2*(times-tau_gvd)**2/tau**2)))
 # Sl = lorenc(t_eval)
 # plt.figure()
 # plt.plot(t_eval,Sl)
