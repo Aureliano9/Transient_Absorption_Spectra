@@ -13,71 +13,8 @@ import math
 import sys
 import keyboard
 from scipy.optimize import curve_fit
+import os
 
-cdict = {'red': ((0.0, 0.0, 0.0),
-                 (0.1, 0.5, 0.5),
-                 (0.2, 0.0, 0.0),
-                 (0.4, 0.2, 0.2),
-                 (0.6, 0.0, 0.0),
-                 (0.8, 1.0, 1.0),
-                 (1.0, 1.0, 1.0)),
-        'green':((0.0, 0.0, 0.0),
-                 (0.1, 0.0, 0.0),
-                 (0.2, 0.0, 0.0),
-                 (0.4, 1.0, 1.0),
-                 (0.6, 1.0, 1.0),
-                 (0.8, 1.0, 1.0),
-                 (1.0, 0.0, 0.0)),
-        'blue': ((0.0, 0.0, 0.0),
-                 (0.1, 0.5, 0.5),
-                 (0.2, 1.0, 1.0),
-                 (0.4, 1.0, 1.0),
-                 (0.6, 0.0, 0.0),
-                 (0.8, 0.0, 0.0),
-                 (1.0, 0.0, 0.0))}
-
-my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
-
-def plot_color(w, t, dA, current_w, current_t, w_bounds=None, t_bounds=None, c_bounds=None):
-    plt.figure()
-    if c_bounds==None or c_bounds[0]==None or c_bounds[1]==None:
-        # vmin=.001, vmax=.004
-        avg = np.nanmean(dA)
-        std = np.nanstd(dA)
-        color_width_std = .35
-        c_bounds = [avg - color_width_std * std, avg + color_width_std * std]
-    plt.pcolor(w, t, dA, vmin=c_bounds[0], vmax=c_bounds[1], cmap=my_cmap)
-    plt.xlabel("Wavelength")
-    plt.ylabel("Time")
-    plt.colorbar()
-    plt.plot([current_w,current_w],[t.min(),t.max()])
-    plt.plot([w.min(),w.max()],[current_t, current_t])
-    if w_bounds==None:
-        w_bounds = [np.min(w),np.max(w)]
-    if t_bounds==None:
-        t_bounds = [np.min(t),np.max(t)]
-    plt.axis([w_bounds[0], w_bounds[1], t_bounds[0], t_bounds[1]])
-    plt.show()
-
-def plot_crosssection(w,t,dA,cut_value,wavelength_flag,bounds=None):
-    plt.figure()
-    if wavelength_flag:
-        cut_index = find_index(t, cut_value)
-        plt.plot(w, dA[cut_index, :])
-        plt.xlabel("Wavelength")
-        plt.title("Time = " + str(t[cut_index]))
-    else:
-        cut_index = find_index(w, cut_value)
-        plt.plot(t, dA[:, cut_index])
-        plt.xlabel("Time")
-        plt.title("Wavelength = " + str(w[cut_index]))
-    if bounds!=None:
-        plt.xlim(bounds[0],bounds[1])
-    plt.ylabel("\Delta A")
-    plt.show()
-    
-def avg(a,b):
-    return (a+b)/2.
 
 # return matrix from file
 def read_file(filename):
@@ -129,6 +66,9 @@ def read_file(filename):
         return (times,wavelengths,signal.transpose())
     
     return (wavelengths,times,signal)
+    
+def avg(a,b):
+    return (a+b)/2.
 
 def find_index(arr, value):
     return np.argmin(np.abs(arr-value))
@@ -227,6 +167,45 @@ def ask_range(type, default=(None,None)):
         max_value = type(max_value)
     return (min_value, max_value)
 
+def ask_which_layer(list_of_data, default=None):
+    filenames = []
+    for data in list_of_data:
+        filenames.append(data.get_name())
+    print("Options:", filenames)
+    display_index = ask_value(int, override_text="Which layer? ")
+    
+    if display_index>=-1 and display_index<len(filenames):
+        return display_index
+    else:
+        print("Error: Must specify an index between 0 and " + str(len(filenames)))
+        return None
+    
+def ask_yes_no(text, default=False):
+    ans = input(text + "(y/n) ")
+    if ans=="y":
+        return True
+    elif ans=="n":
+        return False
+    else:
+        return default
+
+def ask_for_indices(list_of_data):
+    filenames = []
+    for data in list_of_data:
+        filenames.append(data.get_name())
+    print("Options:", filenames)
+    
+    index = input("Specify index to include: ")
+    output = []
+    while index!="":
+        index = int(index)
+        if index>=0 and index<len(list_of_data):
+            output.append(int(index))
+        else:
+            print("Error: Only specify index between 0 and " + str(len(list_of_data)-1))
+        index = input("Specify index to include: ")
+    return output
+
 # def remove_nan(delta_A):
 #     num_t, num_w = delta_A.shape
 #     for w in range(num_w):
@@ -237,17 +216,6 @@ def ask_range(type, default=(None,None)):
 #                     if t-1>=0 and t+1<num_t and not np.isnan(delta_A[t-1,w]) and not np.isnan(delta_A[t+1,w]):
 #                         delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
 #     return delta_A
-
-def remove_spikes(delta_A, width, factor):
-    half_width = int(width/2);
-    for t in range(delta_A.shape[0]):
-        num_w = delta_A.shape[1]
-        for w in range(half_width,num_w-half_width):
-            mean = np.nanmean(delta_A[t,w-half_width:w+half_width])
-            std = np.nanstd(delta_A[t,w-half_width:w+half_width])
-            if (not np.isnan(mean) and abs(delta_A[t,w]-mean)>factor*std):
-                delta_A[t,w] = float("nan")
-    return delta_A
 
 def gaussian(x, sigma):
     g = np.exp(-x**2/(2*sigma**2))/(sigma*math.sqrt(2*math.pi))

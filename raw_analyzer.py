@@ -14,53 +14,84 @@ import sys
 import keyboard
 import helpers
 import os
+from data_object import DataObject
 
 from scipy.optimize import curve_fit
+
+
 
 # PARAMETERS
 # if supplying pump off/on files
 pump_off_filename = None
 pump_on_filename = None
 # if supplying delta A file
-delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv", "Data (1)/CudmpDPEphosBF4ACN_1_scan2.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
-subtract_surface_files = ["Data (1)/Acetonitrile.csv","Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
+delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv", "Data (1)/CudmpDPEphosBF4ACN_1_scan2.csv"]  # ["Four approaches for XPM treatment/CudmpDPEphosBF4ACN_1_scan1.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
+subtract_surface_filenames = ["Data (1)/Acetonitrile.csv","Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
 # time_zero_correction = (-100,-.5) #time units
 
-# READ IN DATA
-if pump_off_filename!=None and pump_on_filename!=None:
-    wavelengths_off, times_off, pump_off = helpers.read_file(pump_off_filename)
-    wavelengths_on, times_on, pump_on = helpers.read_file(pump_on_filename)
-    if not np.allclose(wavelengths_off,wavelengths_on) or not np.allclose(times_off,times_on):
-        print("Pump off and pump on raw data does not have matching axes")
-        sys.exit()
-    delta_A = np.log(pump_off/pump_on)
-    wavelengths = wavelengths_on
-    times = times_on
-elif len(delta_A_filenames)!=0:
-    if len(delta_A_filenames)==1:
-        wavelengths, times, delta_A = helpers.read_file(delta_A_filenames[0])
-    else:
-        delta_As = []
-        for filename in delta_A_filenames:
-            wavelengths, times, delta_A = helpers.read_file(filename)
-            delta_As.append(delta_A)
-        delta_A = np.array(delta_As)
+# # READ IN DATA
+# if pump_off_filename!=None and pump_on_filename!=None:
+#     wavelengths_off, times_off, pump_off = helpers.read_file(pump_off_filename)
+#     wavelengths_on, times_on, pump_on = helpers.read_file(pump_on_filename)
+#     if not np.allclose(wavelengths_off,wavelengths_on) or not np.allclose(times_off,times_on):
+#         print("Pump off and pump on raw data does not have matching axes")
+#         sys.exit()
+#     delta_A = np.log(pump_off/pump_on)
+#     wavelengths = wavelengths_on
+#     times = times_on
+# elif len(delta_A_filenames)!=0:
+#     if len(delta_A_filenames)==1:
+#         wavelengths, times, delta_A = helpers.read_file(delta_A_filenames[0])
+#     else:
+#         delta_As = []
+#         for filename in delta_A_filenames:
+#             wavelengths, times, delta_A = helpers.read_file(filename)
+#             if delta_As.shape()[0]>0 and delta_As[0,:,:].shape()!=delta_A.shape():
+#                 print("ERROR: all files for delta_A_filenames should have the same dimension")
+#                 os.abort()
+#             delta_As.append(delta_A)
+#         delta_A = np.array(delta_As)
+if len(delta_A_filenames)==0:
+    print("Error: No data to read! Change variable delta_A_filenames")
+delta_As = []
+for filename in delta_A_filenames:
+    delta_As.append(DataObject.CreateFromFile(filename))
 
+# READ IN REFERENCE
+ref_surfaces = [] # each element is 3 items
+for filename in subtract_surface_filenames:
+    ref_surfaces.append(DataObject.CreateFromFile(filename))
+
+
+def apply(list_of_data, method, kwargs):
+    if len(list_of_data)==1:
+        return list_of_data[0].__getattribute__(method)(**kwargs)
+    else:
+        specify_index = helpers.ask_yes_no("Apply only to a specific layer?")
+        if specify_index:
+            display_index = helpers.ask_which_layer(list_of_data)
+            if display_index!=None:
+                return list_of_data[display_index].__getattribute__(method)(**kwargs)
+        else:
+            output = []
+            for delta_A in list_of_data:
+                output.append(delta_A.__getattribute__(method)(**kwargs))
+            return output
+
+def apply_one(list_of_data, method, kwargs):
+    if len(list_of_data)==1:
+        return list_of_data[0].__getattribute__(method)(**kwargs)
+    else:
+        display_index = helpers.ask_which_layer(list_of_data)
+        if display_index!=None:
+            return list_of_data[display_index].__getattribute__(method)(**kwargs)
+    
 # speed_of_light = 2.99792458e5
 # wavelengths = speed_of_light/wavelengths
 
-# RECORD KEEPING
-current_wavelength = helpers.avg(wavelengths.min(),wavelengths.max())
-current_time = helpers.avg(times.min(),times.max())
-wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
-time_bounds = (np.min(times),np.max(times))
-c_bounds = (None,None)
 
-# CREATE COPY OF ORIGINAL FOR RESETTING
-original_delta_A = np.copy(delta_A)
-original_wavelengths = np.copy(wavelengths)
-original_times = np.copy(times)
-
+# # RECORD KEEPING
+switched_data_ref = False;
 
 precision = .001
 t_eval = np.arange(-.4, .6, precision)
@@ -150,13 +181,18 @@ menu["nan t"] = "remove nan time spectra"
 menu["background"] = "perform background correction"
 menu["chirp"] = "perform chirp correction"
 menu["reset data"] = "reset all data changes"
+menu["reset ref"] = "reset all data changes to reference surface"
+menu["background ref"] = "perform background correction to reference surface"
+menu["switch data ref"] = "switch data and reference for display purposes"
 
 # LIVE INTERACTION
 while True:
+    
     action = input("Action? (enter 'm' to see command menu)\n")
     if action=="q":
         print("quitting...")
         break
+    
     elif action=="m":
         print("displaying menu...\n")
         width  = 20
@@ -164,218 +200,155 @@ while True:
         for key in menu:
             value = menu[key]
             print(f"{key : <20}{value : <20}")
+            
     elif action=="wc":
         print("changing wavelength value...")
         new_w = helpers.ask_value(float, "wavelength")
         if new_w!=None:
-            current_wavelength = new_w
+            apply(delta_As,"change_current_w",{"new_w": new_w})
+            
     elif action=="tc":
         print("changing time value...")
         new_t = helpers.ask_value(float, "time")
         if new_t!=None:
-            current_time = new_t
+            apply(delta_As,"change_current_t",{"new_t": new_t})
+            
     elif action=="wp":
         print("plotting wavelength plot...")
-        if delta_A.ndim==2:
-            helpers.plot_crosssection(wavelengths,times,delta_A,current_time,True,wavelength_bounds)
-        elif delta_A.ndim==3:
-            print("still have not taken average")
-            display_index = helpers.ask_value(int, override_text="What layer would you like to display? ")
-            helpers.plot_crosssection(wavelengths,times,delta_A[display_index,:,:],current_time,True,wavelength_bounds)
+        apply_one(delta_As,"plot_wavelength_crosssection", {})
+        
     elif action=="tp":
         print("plotting time plot...")
-        if delta_A.ndim==2:
-            helpers.plot_crosssection(wavelengths,times,delta_A,current_wavelength,False,time_bounds)
-        elif delta_A.ndim==3:
-            print("still have not taken average")
-            display_index = helpers.ask_value(int, override_text="What layer would you like to display? ")
-            helpers.plot_crosssection(wavelengths,times,delta_A[display_index,:,:],current_wavelength,False,time_bounds)
+        apply_one(delta_As,"plot_time_crosssection", {})
+        
     elif action=="cp":
         print("plotting color plot...")
-        if delta_A.ndim==2:
-            helpers.plot_color(wavelengths, times, delta_A, current_wavelength, current_time, w_bounds=wavelength_bounds, t_bounds=time_bounds, c_bounds=c_bounds)
-        elif delta_A.ndim==3:
-            print("still have not taken average")
-            display_index = helpers.ask_value(int, override_text="What layer would you like to display? ")
-            if display_index!=None and display_index<delta_A.shape[0]:
-                helpers.plot_color(wavelengths, times, delta_A[display_index,:,:], current_wavelength, current_time, w_bounds=wavelength_bounds, t_bounds=time_bounds, c_bounds=c_bounds)
-            else:
-                print("Invalid index. Index ranges from 0 to " + str(delta_A.shape[0]-1))
+        apply_one(delta_As,"plot_color", {})
+        
     elif action=="waxis":
         print("changing wavelength axis...")
-        wavelength_bounds = helpers.ask_range(float, default = wavelength_bounds)
+        new_range = helpers.ask_range(float)
+        apply(delta_As,"change_waxis",{'new_range': new_range})
+        
     elif action=="taxis":
         print("changing time axis...")
-        time_bounds = helpers.ask_range(float, default = time_bounds)
+        new_range = helpers.ask_range(float)
+        apply(delta_As,"change_taxis",{'new_range': new_range})
+        
     elif action=="caxis":
         print("changing color axis...")
-        c_bounds = helpers.ask_range(float, default = c_bounds)
+        new_range = helpers.ask_range(float)
+        apply(delta_As,"change_caxis",{'new_range': new_range})
+        
     elif action=="reset axis":
         print("reseting axis...")
-        which_axis = helpers.ask_value(int, default=None, override_text="Which axis to reset? (0=wavelength, 1=time, 2=color, 3=all) ")
-        if which_axis==0:
-            wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
-        elif which_axis==1:
-            time_bounds = (np.min(times),np.max(times))
-        elif which_axis==2:
-            c_bounds = (None,None)
-        elif which_axis==3:
-            wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
-            time_bounds = (np.min(times),np.max(times))
-            c_bounds = (None,None)
-        else:
-            print("Must specify axis with 0, 1, 2, 3")
+        axis_index = helpers.ask_value(int, default=None, override_text="Which axis to reset? (0=wavelength, 1=time, 2=color, 3=all) ")
+        apply(delta_As,"reset_axis",{})
+        
     elif action=="play":
         print("playing with time...")
-        for i in range(len(times)):
-            helpers.plot_crosssection(wavelengths,times,delta_A,i,True,wavelength_bounds)
-        repeat_flag = input("Repeat? (y/n)")
-        if repeat_flag!="y":
-            break
+        apply_one(delta_As,"play_over_time",{})
+        
     elif action=="t peak":
         print("Find peak in given range")
-        time_min_index = helpers.find_index(times,time_bounds[0])
-        time_max_index = helpers.find_index(times,time_bounds[1])
-        wavelength_index = helpers.find_index(wavelengths,current_wavelength)
-        peak_index = time_min_index + np.argmax(delta_A[time_min_index:time_max_index,wavelength_index])
-        print("Peak at time: ", times[peak_index])
+        peak_time = apply_one("find_t_peak",{})
+        print("Peak at time: ", peak_time)
+    
+    elif action=="add data":
+        print("Adding new data surface...")
+        filename = input("Filename? ")
+        delta_As.append(DataObject.CreateFromFile(filename))
+        
+    elif action=="add reference":
+        print("Adding new reference surface...")
+        filename = input("Filename? ")
+        ref_surfaces.append(DataObject.CreateFromFile(filename))
+        
     # MUTATING DATA
     elif action=="subtract":
-        # SUBTRACT SURFACE IF NEEDED
-        print("subtracting surface...")
-        print("Candidate surfaces to subtract with:", subtract_surface_files)
-        index = helpers.ask_value(int, default=None, override_text="Specify with index (-1 for custom filename): ")
-        if index==-1:
-            subtract_surface_file = input("Filename? ")
-        elif index!=None:
-            subtract_surface_file = subtract_surface_files[index]
-        else:
-            print("no file specified")
-            subtract_surface_file = ""
-        
-        if subtract_surface_file!="":
-            wavelengths_subtract, times_subtract, subtract_surface = helpers.read_file(subtract_surface_file)
-            print("Original shape:", delta_A.shape)
-            print("Subtract shape:", subtract_surface.shape)
+        # SUBTRACT SURFACE IF NEEDED        
+        subtract_index = helpers.ask_which_layer(ref_surfaces)
+        if subtract_index!=None:
+            surface_to_subtract = ref_surfaces[subtract_index]
+            
             Er = helpers.ask_value(float, default=None, override_text="Energy for subtract surface: ") #650
             Es = helpers.ask_value(float, default=None, override_text="Energy for original surface: ") #500
             f = helpers.ask_value(float, default=None, override_text="Fraction f: ")
             
-            print(min(wavelengths_subtract),max(wavelengths_subtract))
-            print(min(times_subtract),max(times_subtract))
-            
             if Es!=None and Er!=None and f!=None:
                 # subtract surface 
-                for i in range(len(times_subtract)):
-                    delta_A_index = helpers.find_index(times, times_subtract[i])
-                    if delta_A.ndim==3:
-                        for dim_i in range(3):
-                            delta_A[dim_i,delta_A_index,:] -= (Es*f/Er) * subtract_surface[i,:]
-                    else:
-                        delta_A[delta_A_index,:] -= (Es*f/Er) * subtract_surface[i,:]
+                apply(delta_As,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es, "Er": Er, "f": f})
             else:
                 print("Error: Enter valid value")
-                    
-    elif action=="avg":
-        if delta_A.ndim==3:
-            delta_A = np.nanmean(delta_A, axis=0)
         else:
-            print("only one file")
+            print("Error: no file specified")
+            
+    elif action=="avg":
+        indices = helpers.ask_for_indices(delta_As)
+        if len(indices)>0:
+            datas=[]
+            for index in indices:
+                datas.append(delta_As[index])
+            delta_As.append(DataObject.average(datas))
+        # if delta_A.ndim==3:
+        #     delta_A = np.nanmean(delta_A, axis=0)
+        # else:
+        #     print("only one file")
+        
     elif action=="shift time":
         uniform_time_shift = helpers.ask_value(float, default=0)
-        times += uniform_time_shift
-        time_bounds = (time_bounds[0]+uniform_time_shift,time_bounds[1]+uniform_time_shift)
+        apply(delta_As,"time_shift",{"shift_time": uniform_time_shift})
+        
     elif action=="cut w":
         print("cutting wavelength range...") # ask user nan/delete
         cut_min, cut_max = helpers.ask_range(float)
-        cut_min_index = helpers.find_index(wavelengths, cut_min)
-        cut_max_index = helpers.find_index(wavelengths, cut_max)
-        nan_flag = input("replace with nan? otherwise, will delete. (y/n)")
-        if nan_flag=="y":
-            if delta_A.ndim == 2:
-                delta_A[:,cut_min_index:cut_max_index] = np.NaN
-            elif delta_A.ndim == 3:
-                delta_A[:,:,cut_min_index:cut_max_index] = np.NaN
-            else:
-                print("ERROR: data has dimension", delta_A.ndim)
-                os.abort()
-        else:
-            if delta_A.ndim == 2:
-                delta_A = np.concatenate((delta_A[:,:cut_min_index],delta_A[:,cut_max_index:]), axis=1)
-            elif delta_A.ndim == 3:
-                delta_A = np.concatenate((delta_A[:,:,:cut_min_index],delta_A[:,:,cut_max_index:]), axis=2)
-            else:
-                print("ERROR: data has dimension", delta_A.ndim)
-                os.abort()
-        wavelengths = np.concatenate((wavelengths[:cut_min_index],wavelengths[cut_max_index:]))
+        apply(delta_As,"cut_w",{"cut_min": cut_min, "cut_max": cut_max})
+        
     elif action=="spikes":
         print("removing spikes...")
         width = helpers.ask_value(int,"width for spikes")
         factor = helpers.ask_value(float,"number of standard deviations allowed")
-        if width!=None and factor!=None:
-            delta_A = helpers.remove_spikes(delta_A, width, factor)
+        apply(delta_As,"remove_spikes",{"width": width, "factor": factor})
+        
     elif action=="nan w":
         print("removing nan wavelength spectra...")
-        if delta_A.ndim==3:
-            print("Take avg first before removing spectra")
-        else:
-            print("Old dimension: " + str(delta_A.shape))
-            remove = []
-            for t in range(len(times)):
-                if np.any(np.isnan(delta_A[t,:])):
-                    remove.append(t)
-            remove.reverse()
-            for t in remove:
-                if t==len(times)-1:
-                    delta_A = delta_A[:t,:]
-                    times = times[:t]
-                else:
-                    delta_A = np.concatenate((delta_A[:t,:],delta_A[t+1:,:]),axis=0)
-                    times = np.concatenate((times[:t],times[t+1:]))
-            remove.clear()
-            print("New dimension: " + str(delta_A.shape))
+        apply(delta_As,"remove_nan_w",{})
+        
     elif action=="nan t":
         print("removing nan time spectra...")
-        if delta_A.ndim==3:
-            print("Take avg first before removing spectra")
-        else:
-            remove = []
-            for w in range(len(wavelengths)):
-                if (delta_A.ndim==2 and np.any(np.isnan(delta_A[:,w]))) or (delta_A.ndim==3 and np.any(np.isnan(delta_A[:,:,w]))):
-                    remove.append(w)
-            remove.reverse()
-            for w in remove:
-                if w==len(times)-1:
-                    delta_A = delta_A[:,:,:w]
-                    wavelengths = wavelengths[:w]
-                else:
-                    delta_A = np.concatenate((delta_A[:,:w],delta_A[:,w+1:]),axis=0)
-                    wavelengths = np.concatenate((wavelengths[:w],wavelengths[w+1:]))
-            print("New dimension is " + str(delta_A.shape))
-    elif action=="background":
-        print("performing background correction...")
-        cont_flag = input("Warning: average was not taken yet. Continue? (y/n) ")
-        if cont_flag=="y":
-            back_min, back_max = helpers.ask_range(float)
-            if back_min!=None and back_max!=None:
-                background_index = (helpers.find_index(times,back_min),helpers.find_index(times,back_max))
-                if delta_A.ndim==2:
-                    delta_A -= np.nanmean(delta_A[background_index[0]:background_index[1],:],axis=0)
-                elif delta_A.ndim==3:
-                    background = np.nanmean(delta_A[:,background_index[0]:background_index[1],:],axis=1)
-                    for i in range(delta_A.shape[0]):
-                        delta_A[i,:,:] -= background[i,:]
+        apply(delta_As,"remove_nan_t",{})
+    
     elif action=="chirp":
         print("performing chirp correction...")
-        delta_A = helpers.chirp_correction(times,wavelengths,delta_A)
+        print("ERROR: not implemented yet")
+        # delta_A = helpers.chirp_correction(times,wavelengths,delta_A)
+        
+    # want to perform background correction for data and reference
+    elif action=="background":
+        print("performing background correction...")
+        back_min, back_max = helpers.ask_range(float)
+        apply(delta_As,"background_correction",{"back_min":back_min, "back_max":back_max})
+    
+    elif action=="background ref":
+        print("performing background correction on reference surface...")
+        back_min, back_max = helpers.ask_range(float)
+        apply(ref_surfaces,"background_correction",{"back_min":back_min, "back_max":back_max})
+        
     elif action=="reset data":
         print("reseting to original data...")
-        delta_A = original_delta_A
-        wavelengths = original_wavelengths
-        times = original_times
-        wavelength_bounds = (np.min(wavelengths),np.max(wavelengths))
-        time_bounds = (np.min(times),np.max(times))
-        c_bounds = (None,None)
+        apply(delta_As,"reset_data",{})
+    
+    elif action=="reset ref":
+        print("reseting to original data...")
+        apply(ref_surfaces,"reset_data",{})
+        
+    elif action=="switch data ref":
+        print("switching data and reference for display purposes...")
+        temp = delta_As
+        delta_As = ref_surfaces
+        ref_surfaces = temp
+        switched_data_ref = ~switched_data_ref
+        print("Data/Ref inverted" if switched_data_ref else "Data/Ref NOT inverted")
     else:
         print("error, did not recognize command")
     
