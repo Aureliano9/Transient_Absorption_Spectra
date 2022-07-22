@@ -154,25 +154,30 @@ def ask_value(type, label="value", default = None, override_text = None):
     else:
         return type(value)
 
-def ask_range(type, default=(None,None)):
+def ask_range(type, default=(None,None), add_text = None):
+    if add_text!=None:
+        print(add_text)
+        
     min_value = input("Enter new min: ")
     if min_value=="":
+        print("Using default value")
         min_value = default[0]
     else:
         min_value = type(min_value)
     max_value = input("Enter new max: ")
     if max_value=="":
+        print("Using default value")
         max_value = default[1]
     else:
         max_value = type(max_value)
     return (min_value, max_value)
 
-def ask_which_layer(list_of_data, default=None):
+def ask_which_layer(list_of_data):
     filenames = []
     for data in list_of_data:
         filenames.append(data.get_name())
     print("Options:", filenames)
-    display_index = ask_value(int, override_text="Which layer? ")
+    display_index = ask_value(int, override_text="Which layer? ", default=len(filenames))
     
     if display_index>=-1 and display_index<len(filenames):
         return display_index
@@ -217,7 +222,42 @@ def ask_for_indices(list_of_data):
 #                         delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
 #     return delta_A
 
-def gaussian(x, sigma):
-    g = np.exp(-x**2/(2*sigma**2))/(sigma*math.sqrt(2*math.pi))
+def gaussian(x, sigma, mu=0):
+    g = np.exp(-(x-mu)**2/(2*sigma**2))
     g /= np.trapz(g)
     return g
+
+def convert_to_ang_freq(wavelength):
+    # convert from wavelength nm to rad/ps-1
+    speed_of_light = 2.99792458e5 # nm / ps
+    return 2*math.pi*speed_of_light/wavelength # rad/ps^-1
+
+
+def ours(times, c1, c2, c3, tau1, t0):
+    # beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
+    # tau1 = 50e-3 #ps  ##???
+    # target_wavelength = 400 #### ADJUST
+    # center_wavelength = 460 # nm ##???
+    # speed_of_light = 2.99792458e5 # nm / ps
+    # omega2 = 2*math.pi*speed_of_light/target_wavelength # rad/ps^-1
+    # Omega2 = 2*math.pi*speed_of_light/center_wavelength # rad/ps^-1
+    # t0 = (omega2-Omega2)/(2*beta)# frequency dependent
+    # c1 = t0/(2*beta)
+    # c2 = t0/(2*beta)
+    # c3 = -1/(4*beta)
+    return np.exp(-(times-t0)**2/tau1**2)*(c1-c2*2*(times-t0)/tau1**2-c3*(2/tau1**2-4*(times-t0)**2/tau1**4))
+
+def fifth(x, a, b, c, d, e, f):
+    return a + b*x + c*x**2 + d*x**3 + e*x**4 + f*x**5
+
+def fourth(x, a, b, c, d, e):
+    return a + b*x + c*x**2 + d*x**3 + e*x**4
+
+def third(x, a, b, c, d):
+    return a + b*x + c*x**2 + d*x**3
+
+def second(x, a, b, c):
+    return a + b*x + c*x**2
+
+def first(x, a, b):
+    return a + b*x

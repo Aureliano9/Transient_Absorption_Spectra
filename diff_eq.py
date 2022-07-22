@@ -17,13 +17,15 @@ from scipy import fftpack
 
 # user specifies starting parameters 1/B (picosec) 3000picoseconds
 # 1picosecond,10picosecond, 13 microseconds (cannot fit)
-f = .5
-B2=1
-B3=.1
-B4=1/1100000
+f = .5 # FIT
+B2=1 # FIT
+B3=.1 # FIT
+B4=1/1100000 # FIT
+# for gaussian
+sigma= 1 # FIT -> tau1 from XPM fit (average)
 
-F = lambda t, s: np.dot(np.array([[0,0,0,B4], [0,-B2,0,0], [0,B2,-B3,0],[0,0,B3,-B4]]), s)
-G = lambda t, s: np.dot(np.array([[-f*(t/(sigma**2))*np.exp(-t**2/(2*sigma**2)),0,0,B4], [f*(t/(sigma**2))*np.exp(-t**2/(2*sigma**2)),-B2,0,0], [0,B2,-B3,0],[0,0,B3,-B4]]), s)
+# F = lambda t, s: np.dot(np.array([[0,0,0,B4], [0,-B2,0,0], [0,B2,-B3,0],[0,0,B3,-B4]]), s)
+# G = lambda t, s: np.dot(np.array([[-f*(t/(sigma**2))*np.exp(-t**2/(2*sigma**2)),0,0,B4], [f*(t/(sigma**2))*np.exp(-t**2/(2*sigma**2)),-B2,0,0], [0,B2,-B3,0],[0,0,B3,-B4]]), s)
 
  # xdot(1) =  B(4)*x(4);
  # xdot(2) =  - B(2)*x(2);
@@ -35,7 +37,7 @@ initial = [1-f,f,0,0]
 precision = .001
 t_eval = np.arange(-5, 20, precision)
 t_span = [-25,25]
-sol = solve_ivp(F, t_span, initial, t_eval=t_eval)
+# sol = solve_ivp(F, t_span, initial, t_eval=t_eval)
 # sol2 = solve_ivp(G, t_span, initial, t_eval=t_eval)
 # area = 0
 # for el in sol.y.T[:, 0]:
@@ -53,7 +55,7 @@ def solve_diffeq(t, initial):
     x4 = C2*B2*B3*np.exp(-B2*t)/((B2-B3)*(B2-B4))-C3*B3*np.exp(-B3*t)/(B3-B4)+C4*np.exp(-B4*t)
     return x1, x2, x3, x4
 
-sigma= 1
+
 x1, x2, x3, x4 = solve_diffeq(t_eval, initial)
 g = helpers.gaussian(np.arange(-len(t_eval)*precision,len(t_eval)*precision,precision),sigma)
 x1_blurred = ndimage.convolve(x1,g, mode='constant', cval=0.0)
@@ -73,6 +75,15 @@ plt.plot(t_eval, x1_blurred)
 plt.plot(t_eval, x2_blurred)
 plt.plot(t_eval, x3_blurred)
 plt.plot(t_eval, x4_blurred)
+
+# PARAMETERS
+A1 = 1 # FIT
+A2 = 1 # FIT
+A3 = 1 # FIT
+A4 = 1 # FIT
+
+fitted = A1*x1_blurred + A2*x2_blurred + A3*x3_blurred + A4*x4_blurred
+
 # plt.plot(t_eval, x12)
 # plt.plot(t_eval, x22)
 # plt.plot(t_eval, x33)

@@ -41,11 +41,29 @@ cdict = {'red': ((0.0, 0.0, 0.0),
 
 my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
+class TimeTrace:
+    wavelength = None
+    times = np.array([])
+    signal = np.array([])
+    def __init__(self,wavelength_in,times_in,signal_in):
+        self.wavelength = wavelength_in
+        self.times = times_in
+        self.signal = signal_in
+    def get_wavelength(self):
+        return self.wavelength
+    def get_signal(self):
+        return self.signal
+    def get_times(self):
+        return self.times
+    def set_times(self,new_times):
+        self.times = new_times
+
 class DataObject:
     name = ""
     signal = np.array([])
     times = np.array([])
     wavelengths = np.array([])
+    time_traces = {}
     current_w = None
     current_t = None
     w_bounds = (None,None)
@@ -64,6 +82,11 @@ class DataObject:
         self.w_bounds = (np.min(self.wavelengths),np.max(self.wavelengths))
         self.t_bounds = (np.min(self.times),np.max(self.times))
         self.c_bounds = (None,None)
+        
+        # create dictionary for time slices
+        for w_i in range(len(self.wavelengths)):
+            wavelength = self.wavelengths[w_i]
+            self.time_traces[wavelength] = TimeTrace(wavelength,self.times,self.signal[:,w_i])
         
         # keep copy of original that will never be mutated
         self.original_signal = np.copy(self.signal)
@@ -106,11 +129,18 @@ class DataObject:
         return self.times
     def get_signal(self):
         return self.signal
-    def find_t_peak(self):
+    def find_t_peak(self, wavelength=None,t_bounds=None):
         # return the time at which the max occurs in the range of t_bounds
-        time_min_index = helpers.find_index(self.times,self.t_bounds[0])
-        time_max_index = helpers.find_index(self.times,self.t_bounds[1])
-        wavelength_index = helpers.find_index(self.wavelengths,self.current_w)
+        if wavelength==None:
+            wavelength = self.current_w
+        
+        if t_bounds!=None:
+            time_min_index = helpers.find_index(self.times,self.t_bounds[0])
+            time_max_index = helpers.find_index(self.times,self.t_bounds[1])
+        else:
+            time_min_index = helpers.find_index(self.times,t_bounds[0])
+            time_max_index = helpers.find_index(self.times,t_bounds[1])
+        wavelength_index = helpers.find_index(self.wavelengths,wavelength)
         peak_index = time_min_index + np.argmax(self.signal[time_min_index:time_max_index,wavelength_index])
         return self.times[peak_index]
     def plot_color(self):
@@ -208,9 +238,7 @@ class DataObject:
         self.wavelengths = self.original_wavelengths
         self.current_w = helpers.avg(self.wavelengths.min(),self.wavelengths.max())
         self.current_t = helpers.avg(self.times.min(),self.times.max())
-        self.w_bounds = (np.min(self.wavelengths),np.max(self.wavelengths))
-        self.t_bounds = (np.min(self.times),np.max(self.times))
-        self.c_bounds = (None,None)
+        self.reset_axis(3)
     
     def remove_spikes(self, width, factor):
         half_width = int(width/2);
@@ -283,3 +311,250 @@ class DataObject:
             self.current_t = time
             self.plot_wavelength_crosssection()
         self.current_t = original_time
+    def chirp_correction(self, func, popt):
+        new_time_min = float('inf')
+        new_time_max = -float('inf')
+        for w_i in range(len(self.wavelengths)):
+            current_freq = helpers.convert_to_ang_freq(self.wavelengths[w_i])
+            t0 = func(current_freq, *popt)
+            
+            current_min = np.min(self.times)-t0
+            current_max = np.max(self.times)-t0
+            
+            if new_time_min>current_min:
+                new_time_min = current_min
+            if new_time_max<current_max:
+                new_time_max = current_max
+        
+        # precision is not consistent so take the low/high ends separately and extend
+        low_end_precision = abs(self.times[1]-self.times[0])
+        high_end_precision = abs(self.times[-1]-self.times[-2])
+        
+        new_times = np.copy(self.times)
+        if new_time_min < np.min(self.times):
+            low_end = new_time_min + low_end_precision * np.array(range(math.ceil((np.min(self.times)-new_time_min)/low_end_precision)))
+            new_times = np.append(low_end,new_times)
+        if new_time_max > np.max(self.times):
+            high_end = np.max(self.times) + high_end_precision * np.array(range(math.ceil((new_time_max-np.max(self.times))/high_end_precision)))
+            new_times = np.append(new_times,high_end)
+            
+        new_signal = np.empty((len(new_times),len(self.wavelengths)))
+        new_signal[:] = np.nan
+        
+        for w_i in range(len(self.wavelengths)):
+            wavelength = self.wavelengths[w_i]
+            speed_of_light = 2.99792458e5 # nm / ps
+            current_freq = 2*math.pi*speed_of_light/wavelength # rad/ps^-1
+            t0 = func(current_freq, *popt)
+            current_times = self.times-t0
+            
+            store_times = {} # take average in case points are clustered. index to list of values
+            for t_i in range(len(current_times)):
+                time = current_times[t_i]
+                new_time_index = helpers.find_index(new_times, time)
+                if new_time_index in store_times:
+                    store_times[new_time_index].append(self.signal[t_i,w_i])
+                else:
+                    store_times[new_time_index] = [self.signal[t_i,w_i]]
+            
+            for new_time_index in store_times:
+                # take averages of all values close to this time
+                new_signal[new_time_index,w_i] = np.nanmean(np.array(store_times[new_time_index]))
+            
+            self.time_traces[wavelength].set_times(current_times)
+        
+        self.times = new_times
+        self.signal = new_signal
+        
+        # reset all axis
+        self.reset_axis(3)
+
+class DataHandler:
+    delta_As = []
+    reference_surfaces = []
+    parameters = {}
+    switched_data_ref = False
+    
+    # For fit
+    t0_func = staticmethod(helpers.second)
+    t0_popt = None
+    c1_func = staticmethod(helpers.fifth)
+    c1_popt = None
+    c2_func = staticmethod(helpers.fifth)
+    c2_popt = None
+    c3_func = staticmethod(helpers.fifth)
+    c3_popt = None
+    tau1_func = staticmethod(helpers.fifth)
+    tau1_popt = None
+    
+    def __init__(self, delta_A_filenames, ref_surface_filenames):
+        for filename in delta_A_filenames:
+            self.delta_As.append(DataObject.CreateFromFile(filename))
+        for filename in ref_surface_filenames:
+            self.reference_surfaces.append(DataObject.CreateFromFile(filename))
+    def apply(self,is_delta_A, method, kwargs, apply_all=False):
+        list_of_data = self.delta_As if is_delta_A else self.reference_surfaces
+        if len(list_of_data)==1:
+            return list_of_data[0].__getattribute__(method)(**kwargs)
+        else:
+            specify_index = False if apply_all else helpers.ask_yes_no("Apply only to a specific layer?")
+            if specify_index:
+                display_index = helpers.ask_which_layer(list_of_data)
+                if display_index!=None:
+                    return list_of_data[display_index].__getattribute__(method)(**kwargs)
+            else:
+                output = []
+                for delta_A in list_of_data:
+                    output.append(delta_A.__getattribute__(method)(**kwargs))
+                return output
+    def apply_one(self,is_delta_A, method, kwargs):
+        list_of_data = self.delta_As if is_delta_A else self.reference_surfaces
+        if len(list_of_data)==1:
+            return list_of_data[0].__getattribute__(method)(**kwargs)
+        else:
+            display_index = helpers.ask_which_layer(list_of_data)
+            if display_index!=None:
+                return list_of_data[display_index].__getattribute__(method)(**kwargs)
+    def add_data(self,data_object):
+        self.delta_As.append(data_object)
+    def add_reference(self,data_object):
+        self.reference_surfaces.append(data_object)
+    def switch_data_ref(self):
+        temp = self.delta_As
+        self.delta_As = self.reference_surfaces
+        self.reference_surfaces = temp
+        self.switched_data_ref = ~self.switched_data_ref
+    def fit(self, reference_index, t_range, w_range, skip_plot_prompt=False):
+        # use this function to fit XPM signal with solvent data
+        
+        if reference_index<0 or reference_index>=len(self.reference_surfaces):
+            print("Error: reference index is not in range")
+            return
+        
+        ref = self.reference_surfaces[reference_index]
+            
+        # determine time range
+        min_t_index = helpers.find_index(ref.times,t_range[0])
+        max_t_index = helpers.find_index(ref.times,t_range[1])
+        
+        # determine wavelength range
+        min_w_index = helpers.find_index(ref.wavelengths,w_range[0])
+        max_w_index = helpers.find_index(ref.wavelengths,w_range[1])
+        min_w_index_ignore = helpers.find_index(ref.wavelengths,410)
+        max_w_index_ignore = helpers.find_index(ref.wavelengths,430)
+        
+        if min_w_index<min_w_index_ignore and max_w_index>max_w_index_ignore:
+            w_indices = list(range(min_w_index,min_w_index_ignore))
+            w_indices += list(range(max_w_index_ignore,max_w_index))
+        elif min_w_index<min_w_index_ignore and max_w_index<max_w_index_ignore:
+            w_indices = range(min_w_index,min_w_index_ignore)
+        elif min_w_index>min_w_index_ignore and max_w_index>max_w_index_ignore:
+            w_indices = range(max_w_index_ignore, max_w_index)
+        elif min_w_index>min_w_index_ignore and max_w_index<max_w_index_ignore:
+            w_indices = range(0,0)
+            print("Specify a wavelength range outside of forbidden region (410 to 430)")
+        else:
+            print("Error: have a bug with intervals")
+        
+        plot_flag = False if skip_plot_prompt else helpers.ask_yes_no("Plot all wavelengths?", default=False)
+        
+        for w_i in w_indices:
+            wavelength = ref.wavelengths[w_i]
+            sliced_times = ref.times[min_t_index:max_t_index]
+            sliced_signal = ref.signal[min_t_index:max_t_index,w_i]
+            
+            t0 = ref.find_t_peak(wavelength,t_range)
+            
+            initial_c1 = -4.79227948e-04
+            initial_c2 = 3.87793025e-05
+            initial_c3 = -6.49229051e-06
+            tau1 = 1.36241557e-01
+            
+            try:
+                popt, pcov = curve_fit(helpers.ours, sliced_times, sliced_signal, [initial_c1, initial_c2, initial_c3, tau1, t0])
+                pcov_mag = np.linalg.norm(np.array(pcov))
+                if pcov_mag > .01:
+                    raise RuntimeError() 
+                
+                # fit worked
+                self.parameters[wavelength] = popt
+                if plot_flag:
+                    fitted = helpers.ours(sliced_times, *popt)
+                    plt.figure()
+                    plt.plot(sliced_times, sliced_signal)
+                    plt.plot(sliced_times, fitted)
+                    plt.title("$\lambda=" + str(wavelength) + " , initial\_t_0=" + str(t0) + " , final\_t_0=" + str(popt[4]) + " , cov=" + str(pcov_mag) + "$")
+                    plt.show()
+            except Exception:
+                print("Ignoring wavelength " + str(wavelength))
+    
+        chosen_freqs = []
+        c1s = []
+        c2s = []
+        c3s = []
+        tau1s = []
+        t0s = []
+        for wavelength in self.parameters:
+            omega = helpers.convert_to_ang_freq(wavelength)
+            chosen_freqs.append(omega)
+            c1s.append(self.parameters[wavelength][0])
+            c2s.append(self.parameters[wavelength][1])
+            c3s.append(self.parameters[wavelength][2])
+            tau1s.append(self.parameters[wavelength][3])
+            t0s.append(self.parameters[wavelength][4])
+        chosen_freqs = np.array(chosen_freqs)
+        c1s = np.array(c1s)
+        c2s = np.array(c2s)
+        c3s = np.array(c3s)
+        tau1s = np.array(tau1s)
+        t0s = np.array(t0s)
+        
+        #C1
+        self.c1_popt, _ = curve_fit(self.c1_func, chosen_freqs, c1s)
+        print("C1:",self.c1_popt)
+        plt.figure()
+        plt.plot(chosen_freqs, c1s)
+        plt.plot(chosen_freqs, self.c1_func(chosen_freqs, *self.c1_popt))
+        plt.title("c1")
+        plt.xlabel("$rad/ps^-1$")
+        plt.show()
+        
+        #C2
+        self.c2_popt, _ = curve_fit(self.c2_func, chosen_freqs, c2s)
+        print("C2:",self.c2_popt)
+        plt.figure()
+        plt.plot(chosen_freqs, c2s)
+        plt.plot(chosen_freqs, self.c2_func(chosen_freqs, *self.c2_popt))
+        plt.title("c2")
+        plt.xlabel("$rad/ps^-1$")
+        plt.show()
+        
+        #C3
+        self.c3_popt, _ = curve_fit(self.c3_func, chosen_freqs, c3s)
+        print("C3:",self.c3_popt)
+        plt.figure()
+        plt.plot(chosen_freqs, c3s)
+        plt.plot(chosen_freqs, self.c3_func(chosen_freqs, *self.c3_popt))
+        plt.title("c3")
+        plt.xlabel("$rad/ps^-1$")
+        plt.show()
+        
+        #tau1
+        self.tau1_popt, _ = curve_fit(self.tau1_func, chosen_freqs, tau1s)
+        print("tau1:",self.tau1_popt)
+        plt.figure()
+        plt.plot(chosen_freqs, tau1s)
+        plt.plot(chosen_freqs, self.tau1_func(chosen_freqs, *self.tau1_popt))
+        plt.title("tau1")
+        plt.xlabel("$rad/ps^-1$")
+        plt.show()
+        
+        #t0
+        self.t0_popt, _ = curve_fit(self.t0_func, chosen_freqs, t0s)
+        print("t0:",self.t0_popt)
+        plt.figure()
+        plt.plot(chosen_freqs, t0s)
+        plt.plot(chosen_freqs, self.t0_func(chosen_freqs, *self.t0_popt))
+        plt.title("t0")
+        plt.xlabel("$rad/ps^-1$")
+        plt.show()
