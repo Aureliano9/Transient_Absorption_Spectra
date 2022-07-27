@@ -173,8 +173,8 @@ def lorenc(times):
 back_min_default = -100 # SET
 back_max_default = -.5 # SET
 ref_index_default = 1 # SET
-t_range_default = (-1,2)
-w_range_default = (346, 610)
+t_range_default = (-1.5,2)
+w_range_default = (346, 570)
 Er_default = 650
 Es_default = 500
 f_default = 0.8258
@@ -272,7 +272,7 @@ while True:
         
     elif action=="t peak":
         print("Find peak in given range")
-        peak_time = data_handler.apply_one("find_t_peak",{})
+        peak_time = data_handler.apply_one(True,"find_t_peak",{})
         print("Peak at time: ", peak_time)
     
     elif action=="add data":
@@ -288,7 +288,7 @@ while True:
     # MUTATING DATA
     elif action=="subtract":
         # SUBTRACT SURFACE IF NEEDED        
-        subtract_index = helpers.ask_which_layer(data_handler.ref_surfaces)
+        subtract_index = helpers.ask_which_layer(data_handler.reference_surfaces)
         if subtract_index!=None:
             surface_to_subtract = data_handler.ref_surfaces[subtract_index]
             
@@ -338,11 +338,11 @@ while True:
     elif action=="fit ours":
         print("fitting our function to data...")
         
-        ref_index = helpers.ask_which_layer(data_handler.ref_surfaces)
+        ref_index = helpers.ask_which_layer(data_handler.reference_surfaces)
         if ref_index!=None:
             t_range = helpers.ask_range(int,default=(-1,2),add_text="Specify time range to fit")
             w_range = helpers.ask_range(int,default=(346,570),add_text="Specify range of wavelength to explore") #360-570
-            data_handler.fit(ref_index, t_range, w_range)
+            data_handler.fitXPM(ref_index, t_range, w_range)
     
     elif action=="chirp":
         print("performing chirp correction...")
@@ -368,13 +368,17 @@ while True:
         data_handler.apply(True,"reset_data",{})
     
     elif action=="reset ref":
-        print("reseting to original data...")
+        print("reseting to original ref...")
         data_handler.apply(False,"reset_data",{})
         
     elif action=="switch data ref":
         print("switching data and reference for display purposes...")
         data_handler.switch_data_ref()
         print("Data/Ref inverted" if data_handler.switched_data_ref else "Data/Ref NOT inverted")
+        
+    elif action=="fit rate model":
+        print("fitting rate model...")
+        data_handler.apply_one(True,"fitRateModel_NoXPM",{})
     
     ### SHORTCUTS
     elif action=="bfcs":
@@ -386,7 +390,7 @@ while True:
             data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
             
             #fit XPM
-            data_handler.fit(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
+            data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
             #apply chirp correction to both data and reference
             data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},apply_all=True)
@@ -411,7 +415,7 @@ while True:
             data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
             
             #fit XPM
-            data_handler.fit(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
+            data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
             #apply chirp correction to both data and reference
             data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},apply_all=True)
@@ -433,7 +437,7 @@ while True:
             data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
             
             #fit XPM
-            data_handler.fit(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
+            data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
         except Exception as e:
             print("ERROR: Crashed. check constants defined in code for shortcuts")

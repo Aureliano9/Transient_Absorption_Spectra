@@ -14,6 +14,8 @@ import sys
 import keyboard
 from scipy.optimize import curve_fit
 import os
+from scipy import ndimage
+from scipy import fftpack
 
 
 # return matrix from file
@@ -222,9 +224,10 @@ def ask_for_indices(list_of_data):
 #                         delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
 #     return delta_A
 
-def gaussian(x, sigma, mu=0):
-    g = np.exp(-(x-mu)**2/(2*sigma**2))
-    g /= np.trapz(g)
+def gaussian(x, sigma, mu=0,factor=1):
+    g = np.exp(-(x-mu)**2/(2*sigma**2)) #/(sigma*math.sqrt(2*math.pi))
+    g *= factor
+    # g /= np.trapz(g)
     return g
 
 def convert_to_ang_freq(wavelength):
@@ -261,3 +264,98 @@ def second(x, a, b, c):
 
 def first(x, a, b):
     return a + b*x
+
+def solve_diffeq(t, B2, B3, B4):
+    f = .5 #???
+    initial = [1-f,f,0,0]
+    C2 = initial[1]
+    C3 = initial[2]+initial[1]*B2/(B2-B3)
+    C4 = initial[3]-initial[1]*B2*B3/((B2-B3)*(B2-B4))+C3*B3/(B3-B4)
+    C1 = initial[0]-C3*B4/(B3-B4)-B4*C2*B3/((B3-B2)*(B2-B4))+C4
+    x1 = B4*C3*np.exp((-B3)*t)/(B3-B4) + B4*C2*B3*np.exp(-B2*t)/((B3-B2)*(B2-B4))-C4*np.exp(-B4*t) + C1
+    x2 = C2*np.exp(-B2*t)
+    x3 = C3*np.exp(-B3*t)-C2*B2/(B2-B3)*np.exp(-B2*t)
+    x4 = C2*B2*B3*np.exp(-B2*t)/((B2-B3)*(B2-B4))-C3*B3*np.exp(-B3*t)/(B3-B4)+C4*np.exp(-B4*t)
+    
+    # set negative time
+    for i in range(len(t)):
+        if t[i]<=0:
+            x1[i] = 1
+            x2[i] = 0
+            x3[i] = 0
+            x4[i] = 0
+        else:
+            break
+    return x1, x2, x3, x4
+
+def convolve_gaussian(t,x,sigma):
+    area = np.trapz(gaussian(t,sigma))
+    output = []
+    for i in range(len(t)):
+        value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area))
+        output.append(value)
+    return np.array(output)
+
+def all_convolve_gaussian(t,extended_t, x1,x2,x3,x4,sigma):
+    # g = gaussian(extended_t,sigma)
+    # x1_blurred = ndimage.convolve(x1,g, mode='constant', cval=0.0)
+    # x2_blurred = ndimage.convolve(x2,g, mode='constant', cval=0.0)
+    # x3_blurred = ndimage.convolve(x3,g, mode='constant', cval=0.0)
+    # x4_blurred = ndimage.convolve(x4,g, mode='constant', cval=0.0)
+    x1_blurred = convolve_gaussian(extended_t, x1, sigma)
+    x2_blurred = convolve_gaussian(extended_t, x2, sigma)
+    x3_blurred = convolve_gaussian(extended_t, x3, sigma)
+    x4_blurred = convolve_gaussian(extended_t, x4, sigma)
+    min_index = find_index(extended_t, min(t))
+    max_index = find_index(extended_t, max(t))
+    
+    # plt.figure()
+    # plt.plot(extended_t, ndimage.convolve(np.ones(len(extended_t)),g, mode='constant', cval=0.0))
+    # plt.plot(extended_t,x1_blurred)
+    # plt.plot(extended_t,x2_blurred)
+    # plt.plot(extended_t,x3_blurred)
+    # plt.plot(extended_t,x4_blurred)
+    # plt.show()
+    
+    x1_blurred = x1_blurred[min_index:max_index+1]
+    x2_blurred = x2_blurred[min_index:max_index+1]
+    x3_blurred = x3_blurred[min_index:max_index+1]
+    x4_blurred = x4_blurred[min_index:max_index+1]
+    return x1_blurred,x2_blurred,x3_blurred,x4_blurred
+
+def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
+    assert(any(t<0) and any(t>0))
+    # sigma related to tau1
+    left_t = []
+    right_t = []
+    left_precision = abs(t[0]-t[1])
+    right_precision = abs(t[len(t)-1]-t[len(t)-2])
+    extended_left = min(t)-(len(t))*left_precision
+    for i in range(len(t)):
+        left_t.append(extended_left + i*left_precision)
+        right_t.append(max(t) + i*right_precision)
+    left_t = np.array(left_t)
+    right_t = np.array(right_t)
+    extended_t = np.append(np.append(left_t,t),right_t)
+    
+    x1, x2, x3, x4 = solve_diffeq(extended_t, B2, B3, B4)    
+    
+    plt.figure()
+    plt.plot(extended_t,x1)
+    plt.plot(extended_t,x2)
+    plt.plot(extended_t,x3)
+    plt.plot(extended_t,x4)
+    plt.show()
+    
+    
+    x1, x2, x3, x4 = all_convolve_gaussian(t,extended_t,x1,x2,x3,x4,sigma)
+    
+    plt.figure()
+    plt.plot(t,x1)
+    plt.plot(t,x2)
+    plt.plot(t,x3)
+    plt.plot(t,x4)
+    plt.show()
+    
+    superimposed = A1*x1 + A2*x2 + A3*x3 + A4*x4
+    return superimposed
