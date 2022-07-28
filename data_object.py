@@ -410,31 +410,52 @@ class DataObject:
         # reset all axis
         self.reset_axis(3)
         self.chirp_corrected = True
-    def fitRateModel_NoXPM(self):
-        w_i = helpers.find_index(self.wavelengths, self.current_w)
-        current_time_trace = self.time_traces[w_i]
-        t_min = helpers.find_index(current_time_trace.times, self.t_bounds[0])
-        t_max = helpers.find_index(current_time_trace.times, self.t_bounds[1])
-
-        focus_times = current_time_trace.times[t_min:t_max]
-        focus_signal = current_time_trace.signal[t_min:t_max]
-        B2 = .8
-        B3 = .15
-        B4 = .05
-        A1 = 0
-        A2 = 2e-3
-        A3 = 1.5e-3
-        A4 = 6e-3
-        sigma = 0.03
-        popt, pcov = curve_fit(helpers.rateModel, focus_times, focus_signal, [B2, B3, B4, A1, A2, A3, A4, sigma])
-        fitted = helpers.rateModel(focus_times, *popt)
-        # fitted = helpers.rateModel(focus_times, B2, B3, B4, A1, A2, A3, A4, sigma)
-        plt.figure()
-        plt.plot(focus_times, focus_signal)
-        plt.plot(focus_times, fitted)
-        plt.ylim(-.00025,.00175)
-        plt.xlim(-1,1.5)
-        plt.show()
+    def fitRateModel1(self, w_min, w_max, t_min, t_max, interval, folder_name):
+        outputParams = {}
+        
+        wavelengths_to_fit = np.arange(w_min,w_max,interval)
+        
+        for wavelength_to_fit in wavelengths_to_fit:
+            w_i = helpers.find_index(self.wavelengths, wavelength_to_fit)
+            current_time_trace = self.time_traces[w_i]
+            w = current_time_trace.wavelength
+            
+            t_min_index = helpers.find_index(current_time_trace.times, t_min)
+            t_max_index = helpers.find_index(current_time_trace.times, t_max)
+    
+            focus_times = current_time_trace.times[t_min_index:t_max_index]
+            focus_signal = current_time_trace.signal[t_min_index:t_max_index]
+            
+            plt.figure()
+            plt.plot(focus_times, focus_signal)
+            plt.title(str(w) + " nm")
+            plt.show()
+            
+            B2 = .8
+            B3 = .15
+            B4 = .05
+            A1 = 0
+            A2 = 2e-3
+            A3 = 1.5e-3
+            A4 = 6e-3
+            sigma = 0.03
+            try:
+                popt, pcov = curve_fit(helpers.rateModel, focus_times, focus_signal, [B2, B3, B4, A1, A2, A3, A4, sigma])
+                fitted = helpers.rateModel(focus_times, *popt)
+                print(*popt)
+                plt.figure()
+                plt.plot(focus_times, focus_signal)
+                plt.plot(focus_times, fitted)
+                plt.title("Rate model fitted for " + str(w) + " nm")
+                plt.savefig(folder_name + "/" + str(w) + ".png")
+                plt.show()
+            except Exception as e:
+                print("Could not fit")
+                print(e)
+            
+            outputParams[w] = popt
+        
+        return outputParams
 
 class DataHandler:
     delta_As = []
@@ -491,6 +512,11 @@ class DataHandler:
         self.delta_As = self.reference_surfaces
         self.reference_surfaces = temp
         self.switched_data_ref = ~self.switched_data_ref
+    def write_out_params(name, params):
+        f = open(name, "w")
+        for wavelength in params:
+            f.write(str(wavelength) + "," + str(params[wavelength]) + "\n")
+        f.close()
     def fitXPM(self, reference_index, t_range, w_range, skip_plot_prompt=False):
         # use this function to fit XPM signal with solvent data
         

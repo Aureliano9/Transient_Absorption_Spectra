@@ -378,7 +378,9 @@ while True:
         
     elif action=="fit rate model":
         print("fitting rate model...")
-        data_handler.apply_one(True,"fitRateModel_NoXPM",{})
+        folder_name = "rate model fitting (chirp_corr, subtracted)"
+        fit_params1 = data_handler.apply_one(True,"fitRateModel1",{"w_min":480,"w_max":600,"t_min":-1,"t_max":1.5,"interval":10, "folder_name": folder_name})
+        DataHandler.write_out_params(folder_name+"/params1.txt", fit_params1)
     
     ### SHORTCUTS
     elif action=="bfcs":

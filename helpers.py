@@ -351,12 +351,12 @@ def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
     x3 = np.array(x3)
     x4 = np.array(x4)
     
-    plt.figure()
-    plt.plot(t,x1)
-    plt.plot(t,x2)
-    plt.plot(t,x3)
-    plt.plot(t,x4)
-    plt.show()
+    # plt.figure()
+    # plt.plot(t,x1)
+    # plt.plot(t,x2)
+    # plt.plot(t,x3)
+    # plt.plot(t,x4)
+    # plt.show()
     
     superimposed = A1*x1 + A2*x2 + A3*x3 + A4*x4
     return superimposed
