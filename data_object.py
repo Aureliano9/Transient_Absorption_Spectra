@@ -422,11 +422,12 @@ class DataObject:
         B3 = .15
         B4 = .05
         A1 = 0
-        A2 = 2e-3
-        A3 = 5e-4
-        A4 = 5e-3
-        sigma = 0.1
+        A2 = 2.5e-3
+        A3 = 6e-4
+        A4 = 6e-3
+        sigma = 0.03
         # popt, pcov = curve_fit(helpers.rateModel, focus_times, focus_signal, [B2, B3, B4, A1, A2, A3, A4, sigma])
+        # fitted = helpers.rateModel(focus_times, *popt)
         fitted = helpers.rateModel(focus_times, B2, B3, B4, A1, A2, A3, A4, sigma)
         plt.figure()
         plt.plot(focus_times, focus_signal)

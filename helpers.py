@@ -293,62 +293,63 @@ def convolve_gaussian(t,x,sigma):
     output = []
     for i in range(len(t)):
         value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area))
+        
         output.append(value)
     return np.array(output)
 
-def all_convolve_gaussian(t,extended_t, x1,x2,x3,x4,sigma):
-    # g = gaussian(extended_t,sigma)
-    # x1_blurred = ndimage.convolve(x1,g, mode='constant', cval=0.0)
-    # x2_blurred = ndimage.convolve(x2,g, mode='constant', cval=0.0)
-    # x3_blurred = ndimage.convolve(x3,g, mode='constant', cval=0.0)
-    # x4_blurred = ndimage.convolve(x4,g, mode='constant', cval=0.0)
+def all_convolve_gaussian(extended_t, x1,x2,x3,x4,sigma):
+
     x1_blurred = convolve_gaussian(extended_t, x1, sigma)
     x2_blurred = convolve_gaussian(extended_t, x2, sigma)
     x3_blurred = convolve_gaussian(extended_t, x3, sigma)
     x4_blurred = convolve_gaussian(extended_t, x4, sigma)
-    min_index = find_index(extended_t, min(t))
-    max_index = find_index(extended_t, max(t))
+    
     
     # plt.figure()
-    # plt.plot(extended_t, ndimage.convolve(np.ones(len(extended_t)),g, mode='constant', cval=0.0))
     # plt.plot(extended_t,x1_blurred)
     # plt.plot(extended_t,x2_blurred)
     # plt.plot(extended_t,x3_blurred)
     # plt.plot(extended_t,x4_blurred)
     # plt.show()
     
-    x1_blurred = x1_blurred[min_index:max_index+1]
-    x2_blurred = x2_blurred[min_index:max_index+1]
-    x3_blurred = x3_blurred[min_index:max_index+1]
-    x4_blurred = x4_blurred[min_index:max_index+1]
     return x1_blurred,x2_blurred,x3_blurred,x4_blurred
 
 def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
     assert(any(t<0) and any(t>0))
     # sigma related to tau1
-    left_t = []
-    right_t = []
     left_precision = abs(t[0]-t[1])
     right_precision = abs(t[len(t)-1]-t[len(t)-2])
-    extended_left = min(t)-(len(t))*left_precision
-    for i in range(len(t)):
-        left_t.append(extended_left + i*left_precision)
-        right_t.append(max(t) + i*right_precision)
-    left_t = np.array(left_t)
-    right_t = np.array(right_t)
-    extended_t = np.append(np.append(left_t,t),right_t)
+    smallest_precision = min(left_precision, right_precision)
+    if smallest_precision>=sigma:
+        smallest_precision = sigma/10
+    extended_left = min(t)-(len(t)//2+1)*smallest_precision
+    extended_right = max(t)+(len(t)//2+1)*smallest_precision
+    t_extended = np.arange(extended_left, extended_right, smallest_precision)
     
-    x1, x2, x3, x4 = solve_diffeq(extended_t, B2, B3, B4)    
+    x1_extended, x2_extended, x3_extended, x4_extended = solve_diffeq(t_extended, B2, B3, B4)    
     
-    plt.figure()
-    plt.plot(extended_t,x1)
-    plt.plot(extended_t,x2)
-    plt.plot(extended_t,x3)
-    plt.plot(extended_t,x4)
-    plt.show()
+    # plt.figure()
+    # plt.plot(t_extended,x1_extended)
+    # plt.plot(t_extended,x2_extended)
+    # plt.plot(t_extended,x3_extended)
+    # plt.plot(t_extended,x4_extended)
+    # plt.show()
     
+    x1_extended, x2_extended, x3_extended, x4_extended = all_convolve_gaussian(t_extended, x1_extended, x2_extended, x3_extended, x4_extended, sigma)
     
-    x1, x2, x3, x4 = all_convolve_gaussian(t,extended_t,x1,x2,x3,x4,sigma)
+    x1 = []
+    x2 = []
+    x3 = []
+    x4 = []
+    for new_t in t:
+        x1.append(np.interp(new_t, t_extended, x1_extended))
+        x2.append(np.interp(new_t, t_extended, x2_extended))
+        x3.append(np.interp(new_t, t_extended, x3_extended))
+        x4.append(np.interp(new_t, t_extended, x4_extended))
+    x1 = np.array(x1)
+    x2 = np.array(x2)
+    x3 = np.array(x3)
+    x4 = np.array(x4)
     
     plt.figure()
     plt.plot(t,x1)
