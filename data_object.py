@@ -180,10 +180,36 @@ class DataObject:
         plt.show()
     def plot_wavelength_crosssection(self,label=None):
         plt.figure()
-        cut_index = helpers.find_index(self.times, self.current_t)
-        plt.plot(self.wavelengths, self.signal[cut_index, :])
+        if self.chirp_corrected:
+            interpolated_spectra = []
+            # error = []
+            for w_i in range(len(self.wavelengths)):
+                time_trace = self.time_traces[w_i]
+                interpolated_spectra.append(np.interp(self.current_t, time_trace.times, time_trace.signal))
+                # # if np.sum(np.isnan(time_trace.signal))>40:
+                # #     plt.figure()
+                # #     plt.plot(time_trace.times, time_trace.signal)
+                # #     plt.plot(self.original_times, self.original_signal[:,w_i])
+                # #     plt.scatter([self.current_t],[np.interp(self.current_t, time_trace.times, time_trace.signal)])
+                # #     plt.xlim(self.t_bounds[0],self.t_bounds[1])
+                # #     plt.title(str(self.wavelengths[w_i]))
+                # #     plt.show()
+                    
+                # #     error_x.append(self.wavelengths[w_i])
+                # #     error_y.append(0)
+                # error.append(np.sum(np.isnan(time_trace.signal)))
+            # error = np.array(error)
+            # error = error/abs(np.nanmax(error))
+            # error = error*abs(np.nanmax(interpolated_spectra))
+            
+            plt.scatter(self.wavelengths, interpolated_spectra, s=1, marker=".")
+            # plt.scatter(self.wavelengths, error, c='r', s=1, marker=".")
+            plt.title(self.name + ": Interpolated Time = " + str(self.current_t))
+        else:
+            cut_index = helpers.find_index(self.times, self.current_t)
+            plt.plot(self.wavelengths, self.signal[cut_index, :])
+            plt.title(self.name + ": Time = " + str(self.times[cut_index]))
         plt.xlabel("Wavelength")
-        plt.title(self.name + ": Time = " + str(self.times[cut_index]))
         plt.xlim(self.w_bounds[0],self.w_bounds[1])
         if label!=None:
             plt.text(0,0,label)
@@ -193,8 +219,10 @@ class DataObject:
         plt.figure()
         w_i = helpers.find_index(self.wavelengths, self.current_w)
         time_trace = self.time_traces[w_i]
-        plt.plot(time_trace.times, time_trace.signal)
-
+        if self.chirp_corrected:
+            plt.scatter(time_trace.times, time_trace.signal, s=1, marker=".")
+        else:
+            plt.plot(time_trace.times, time_trace.signal)
         plt.xlabel("Time")
         plt.title(self.name + ": Wavelength = " + str(self.wavelengths[w_i]))
         plt.xlim(self.t_bounds[0],self.t_bounds[1])
@@ -368,18 +396,24 @@ class DataObject:
         
         # precision is not consistent so take the low/high ends separately and extend
         low_end_precision = abs(self.times[1]-self.times[0])
-        high_end_precision = abs(self.times[-1]-self.times[-2])
+        # high_end_precision = abs(self.times[-1]-self.times[-2])
+        # min_precision = min(low_end_precision,high_end_precision)
         
-        new_times = np.copy(self.times)
-        if new_time_min < np.min(self.times):
-            low_end = new_time_min + low_end_precision * np.array(range(math.ceil((np.min(self.times)-new_time_min)/low_end_precision)))
-            new_times = np.append(low_end,new_times)
-        if new_time_max > np.max(self.times):
-            high_end = np.max(self.times) + high_end_precision * np.array(range(math.ceil((new_time_max-np.max(self.times))/high_end_precision)))
-            new_times = np.append(new_times,high_end)
+        # new_times = np.copy(self.times)
+        # if new_time_min < np.min(self.times):
+        #     low_end = new_time_min + low_end_precision * np.array(range(math.ceil((np.min(self.times)-new_time_min)/low_end_precision)))
+        #     new_times = np.append(low_end,new_times)
+        # if new_time_max > np.max(self.times):
+        #     high_end = np.max(self.times) + high_end_precision * np.array(range(math.ceil((new_time_max-np.max(self.times))/high_end_precision)))
+        #     new_times = np.append(new_times,high_end)
+        
+        new_times = np.append(np.arange(new_time_min,min(self.times),low_end_precision),np.copy(self.times))
+        
+        # new_times = np.arange(new_time_min,new_time_max,min_precision)
             
         new_signal = np.empty((len(new_times),len(self.wavelengths)))
         new_signal[:] = np.nan
+        # print(t0,min_precision)
         
         for w_i in range(len(self.wavelengths)):
             wavelength = self.wavelengths[w_i]
@@ -401,7 +435,7 @@ class DataObject:
                 # take averages of all values close to this time
                 new_signal[new_time_index,w_i] = np.nanmean(np.array(store_times[new_time_index]))
             
-            self.time_traces[w_i].set_times(current_times)
+            self.time_traces[w_i].set_times(self.times-t0)
         
         self.times = new_times
         self.signal = new_signal
@@ -440,7 +474,7 @@ class DataObject:
             A4 = 6e-3
             sigma = 0.03
             try:
-                popt, pcov = curve_fit(helpers.rateModel, focus_times, focus_signal, [B2, B3, B4, A1, A2, A3, A4, sigma])
+                popt, pcov = curve_fit(helpers.rateModel, focus_times[~np.isnan(focus_signal)], focus_signal[~np.isnan(focus_signal)], [B2, B3, B4, A1, A2, A3, A4, sigma])
                 fitted = helpers.rateModel(focus_times, *popt)
                 print(*popt)
                 plt.figure()
@@ -451,6 +485,150 @@ class DataObject:
                 plt.show()
             except Exception as e:
                 print("Could not fit")
+                print(e)
+            
+            outputParams[w] = popt
+        
+        return outputParams
+    
+    def fitRateModel2(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
+        # have not chirp corrected
+        
+        outputParams = {}
+        
+        wavelengths_to_fit = np.arange(w_min,w_max,interval)
+        
+        for wavelength_to_fit in wavelengths_to_fit:
+            w_i = helpers.find_index(self.wavelengths, wavelength_to_fit)
+            current_time_trace = self.time_traces[w_i]
+            w = current_time_trace.wavelength
+            
+            t_min_index = helpers.find_index(current_time_trace.times, t_min)
+            t_max_index = helpers.find_index(current_time_trace.times, t_max)
+    
+            focus_times = current_time_trace.times[t_min_index:t_max_index]
+            focus_signal = current_time_trace.signal[t_min_index:t_max_index]
+            
+            t0 = ref.find_t_peak(w,t_bounds=[t_min,t_max])
+            
+            # plt.figure()
+            # plt.plot(focus_times, focus_signal)
+            # plt.title(str(w) + " nm " + str(t0))
+            # plt.show()
+            
+            # plt.figure()
+            # plt.plot(ref.times, ref.signal[:,w_i])
+            # plt.title(str(w) + " nm " + str(t0))
+            # plt.show()
+            
+            B2 = .8
+            B3 = .01
+            B4 = 5.6
+            A1 = -2e5
+            A2 = 2e-3
+            A3 = 5e-3
+            A4 = 6e-3
+            sigma = 4e-2
+            
+            # plt.figure()
+            # plt.plot(focus_times, focus_signal)
+            # plt.plot(focus_times, helpers.rateModel2(focus_times, B2, B3, B4, A1, A2, A3, A4, sigma, t0))
+            # plt.title("Before " + str(w) + " nm. to=" + str(t0))
+            # plt.show()
+            # # plt.savefig(folder_name + "/" + str(w) + ".png")
+            
+            try:
+                popt, pcov = curve_fit(helpers.rateModel2, focus_times[~np.isnan(focus_signal)], focus_signal[~np.isnan(focus_signal)], [B2, B3, B4, A1, A2, A3, A4, sigma, t0])
+                fitted = helpers.rateModel2(focus_times, *popt)
+                print(*popt)
+                plt.figure()
+                plt.plot(focus_times, focus_signal)
+                plt.plot(focus_times, fitted)
+                plt.title("Rate model fitted for " + str(w) + " nmm, t0 = " + str(t0))
+                plt.savefig(folder_name + "/" + str(w) + ".png")
+                plt.show()
+            except Exception as e:
+                print("Could not fit")
+                # plt.figure()
+                # plt.plot(focus_times, focus_signal)
+                # plt.plot(focus_times, helpers.rateModel2(focus_times, B2, B3, B4, A1, A2, A3, A4, sigma, t0))
+                # plt.title("Failed for " + str(w) + " nm, t0 = " + str(t0))
+                # # plt.savefig(folder_name + "/" + str(w) + ".png")
+                # plt.show()
+                print(e)
+            
+            outputParams[w] = popt
+        
+        return outputParams
+    
+    def fitRateModel3(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
+        # have not chirp corrected and XPM signal is left
+        
+        outputParams = {}
+        
+        wavelengths_to_fit = np.arange(w_min,w_max,interval)
+        
+        for wavelength_to_fit in wavelengths_to_fit:
+            w_i = helpers.find_index(self.wavelengths, wavelength_to_fit)
+            current_time_trace = self.time_traces[w_i]
+            w = current_time_trace.wavelength
+            
+            t_min_index = helpers.find_index(current_time_trace.times, t_min)
+            t_max_index = helpers.find_index(current_time_trace.times, t_max)
+    
+            focus_times = current_time_trace.times[t_min_index:t_max_index]
+            focus_signal = current_time_trace.signal[t_min_index:t_max_index]
+            
+            t0 = ref.find_t_peak(w,t_bounds=[t_min,t_max])
+            
+            # plt.figure()
+            # plt.plot(focus_times, focus_signal)
+            # plt.title(str(w) + " nm " + str(t0))
+            # plt.show()
+            
+            # plt.figure()
+            # plt.plot(ref.times, ref.signal[:,w_i])
+            # plt.title(str(w) + " nm " + str(t0))
+            # plt.show()
+            
+            B2 = .8
+            B3 = .01
+            B4 = 5.6
+            A1 = -2e5
+            A2 = 2e-3
+            A3 = 5e-3
+            A4 = 6e-3
+            sigma = 4e-2
+            
+            c1 = -.0005
+            c2 = 0.00005
+            c3 = -1
+            
+            # plt.figure()
+            # plt.plot(focus_times, focus_signal)
+            # plt.plot(focus_times, helpers.rateModel2(focus_times, B2, B3, B4, A1, A2, A3, A4, sigma, t0))
+            # plt.title("Before " + str(w) + " nm. to=" + str(t0))
+            # plt.show()
+            # # plt.savefig(folder_name + "/" + str(w) + ".png")
+            
+            try:
+                popt, pcov = curve_fit(helpers.rateModel3, focus_times[~np.isnan(focus_signal)], focus_signal[~np.isnan(focus_signal)], [B2, B3, B4, A1, A2, A3, A4, sigma, t0, c1, c2, c3])
+                fitted = helpers.rateModel3(focus_times, *popt)
+                print(*popt)
+                plt.figure()
+                plt.plot(focus_times, focus_signal)
+                plt.plot(focus_times, fitted)
+                plt.title("Rate model fitted for " + str(w) + " nmm, t0 = " + str(t0))
+                plt.savefig(folder_name + "/" + str(w) + ".png")
+                plt.show()
+            except Exception as e:
+                print("Could not fit")
+                plt.figure()
+                plt.plot(focus_times, focus_signal)
+                plt.plot(focus_times, helpers.rateModel2(focus_times, B2, B3, B4, A1, A2, A3, A4, sigma, t0))
+                plt.title("Failed for " + str(w) + " nm, t0 = " + str(t0))
+                # plt.savefig(folder_name + "/" + str(w) + ".png")
+                plt.show()
                 print(e)
             
             outputParams[w] = popt
@@ -495,14 +673,16 @@ class DataHandler:
                 for delta_A in list_of_data:
                     output.append(delta_A.__getattribute__(method)(**kwargs))
                 return output
-    def apply_one(self,is_delta_A, method, kwargs):
+    def apply_one(self,is_delta_A, method, kwargs,default=None):
         list_of_data = self.delta_As if is_delta_A else self.reference_surfaces
         if len(list_of_data)==1:
             return list_of_data[0].__getattribute__(method)(**kwargs)
-        else:
+        elif default==None:
             display_index = helpers.ask_which_layer(list_of_data)
             if display_index!=None:
                 return list_of_data[display_index].__getattribute__(method)(**kwargs)
+        else:
+            return list_of_data[default].__getattribute__(method)(**kwargs)
     def add_data(self,data_object):
         self.delta_As.append(data_object)
     def add_reference(self,data_object):

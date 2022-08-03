@@ -224,9 +224,9 @@ def ask_for_indices(list_of_data):
 #                         delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
 #     return delta_A
 
-def gaussian(x, sigma, mu=0,factor=1):
+def gaussian(x, sigma, mu=0, factor=1):
     g = np.exp(-(x-mu)**2/(2*sigma**2)) #/(sigma*math.sqrt(2*math.pi))
-    g *= factor
+    g = g*factor
     # g /= np.trapz(g)
     return g
 
@@ -315,7 +315,6 @@ def all_convolve_gaussian(extended_t, x1,x2,x3,x4,sigma):
     return x1_blurred,x2_blurred,x3_blurred,x4_blurred
 
 def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
-    assert(any(t<0) and any(t>0))
     # sigma related to tau1
     left_precision = abs(t[0]-t[1])
     right_precision = abs(t[len(t)-1]-t[len(t)-2])
@@ -360,3 +359,57 @@ def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
     
     superimposed = A1*x1 + A2*x2 + A3*x3 + A4*x4
     return superimposed
+
+def rateModel2(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0):
+    # rate model with no chirp correction
+    
+    # sigma related to tau1
+    left_precision = abs(t[0]-t[1])
+    right_precision = abs(t[len(t)-1]-t[len(t)-2])
+    smallest_precision = min(left_precision, right_precision)
+    if smallest_precision>=sigma:
+        smallest_precision = sigma/10
+    extended_left = min(t)-(len(t)//2+1)*smallest_precision
+    extended_right = max(t)+(len(t)//2+1)*smallest_precision
+    t_extended = np.arange(extended_left, extended_right, smallest_precision)
+    
+    x1_extended, x2_extended, x3_extended, x4_extended = solve_diffeq(t_extended-t0, B2, B3, B4)    
+    
+    # plt.figure()
+    # plt.plot(t_extended,x1_extended)
+    # plt.plot(t_extended,x2_extended)
+    # plt.plot(t_extended,x3_extended)
+    # plt.plot(t_extended,x4_extended)
+    # plt.show()
+    
+    x1_extended, x2_extended, x3_extended, x4_extended = all_convolve_gaussian(t_extended-t0, x1_extended, x2_extended, x3_extended, x4_extended, sigma)
+    
+    x1 = []
+    x2 = []
+    x3 = []
+    x4 = []
+    for new_t in t:
+        x1.append(np.interp(new_t, t_extended, x1_extended))
+        x2.append(np.interp(new_t, t_extended, x2_extended))
+        x3.append(np.interp(new_t, t_extended, x3_extended))
+        x4.append(np.interp(new_t, t_extended, x4_extended))
+    x1 = np.array(x1)
+    x2 = np.array(x2)
+    x3 = np.array(x3)
+    x4 = np.array(x4)
+    
+    # plt.figure()
+    # plt.plot(t,x1)
+    # plt.plot(t,x2)
+    # plt.plot(t,x3)
+    # plt.plot(t,x4)
+    # plt.show()
+    
+    superimposed = A1*x1 + A2*x2 + A3*x3 + A4*x4
+    return superimposed
+
+def rateModel3(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0, c1, c2, c3):
+    # rate model with no chirp correction and without subtracting XPM
+    signal = rateModel2(t,B2,B3,B4,A1,A2,A3,A4,sigma,t0)
+    XPM = ours(t,c1,c2,c3,math.sqrt(2)*sigma,t0)
+    return signal + XPM

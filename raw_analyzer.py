@@ -174,7 +174,7 @@ back_min_default = -100 # SET
 back_max_default = -.5 # SET
 ref_index_default = 1 # SET
 t_range_default = (-1.5,2)
-w_range_default = (346, 570)
+w_range_default = (346, 780) #570)
 Er_default = 650
 Es_default = 500
 f_default = 0.8258
@@ -290,7 +290,7 @@ while True:
         # SUBTRACT SURFACE IF NEEDED        
         subtract_index = helpers.ask_which_layer(data_handler.reference_surfaces)
         if subtract_index!=None:
-            surface_to_subtract = data_handler.ref_surfaces[subtract_index]
+            surface_to_subtract = data_handler.reference_surfaces[subtract_index]
             
             Er = helpers.ask_value(float, default=None, override_text="Energy for subtract surface: ") #650
             Es = helpers.ask_value(float, default=None, override_text="Energy for original surface: ") #500
@@ -340,8 +340,8 @@ while True:
         
         ref_index = helpers.ask_which_layer(data_handler.reference_surfaces)
         if ref_index!=None:
-            t_range = helpers.ask_range(int,default=(-1,2),add_text="Specify time range to fit")
-            w_range = helpers.ask_range(int,default=(346,570),add_text="Specify range of wavelength to explore") #360-570
+            t_range = helpers.ask_range(int,default=t_range_default,add_text="Specify time range to fit")
+            w_range = helpers.ask_range(int,default=w_range_default,add_text="Specify range of wavelength to explore") #360-570
             data_handler.fitXPM(ref_index, t_range, w_range)
     
     elif action=="chirp":
@@ -378,9 +378,47 @@ while True:
         
     elif action=="fit rate model":
         print("fitting rate model...")
-        folder_name = "rate model fitting (chirp_corr, subtracted)"
-        fit_params1 = data_handler.apply_one(True,"fitRateModel1",{"w_min":480,"w_max":600,"t_min":-1,"t_max":1.5,"interval":10, "folder_name": folder_name})
-        DataHandler.write_out_params(folder_name+"/params1.txt", fit_params1)
+        folder_name = "rate model fitting (chirp_corr, subtracted)/model1"
+        
+        w_min, w_max = helpers.ask_range(float, default=(480,600), add_text="Specify wavelength range to fit")
+        interval = helpers.ask_value(float, default=10, label="interval for wavelength")
+        t_min, t_max = helpers.ask_range(float, default=(-1,1.5), add_text="Specify time range to fit")
+        
+        if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
+            fit_params1 = data_handler.apply_one(True,"fitRateModel1",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "folder_name": folder_name})
+            DataHandler.write_out_params(folder_name+"/params1.txt", fit_params1)
+        else:
+            print("Improper inputs")
+    
+    elif action=="fit rate model 2":
+        print("fitting rate model...")
+        folder_name = "rate model fitting (chirp_corr, subtracted)/model2"
+        
+        w_min, w_max = helpers.ask_range(float, default=(490,600), add_text="Specify wavelength range to fit")
+        interval = helpers.ask_value(float, default=10, label="interval for wavelength")
+        t_min, t_max = helpers.ask_range(float, default=(-2,5), add_text="Specify time range to fit")
+        
+        if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
+            ref = data_handler.reference_surfaces[1]
+            fit_params1 = data_handler.apply_one(True,"fitRateModel2",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
+            DataHandler.write_out_params(folder_name+"/params2.txt", fit_params1)
+        else:
+            print("Improper inputs")
+    
+    elif action=="fit rate model 3":
+        print("fitting rate model...")
+        folder_name = "rate model fitting (chirp_corr, subtracted)/model3"
+        
+        w_min, w_max = helpers.ask_range(float, default=(480,600), add_text="Specify wavelength range to fit")
+        interval = helpers.ask_value(float, default=10, label="interval for wavelength")
+        t_min, t_max = helpers.ask_range(float, default=(-2,5), add_text="Specify time range to fit")
+        
+        if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
+            ref = data_handler.reference_surfaces[1]
+            fit_params1 = data_handler.apply_one(True,"fitRateModel3",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
+            DataHandler.write_out_params(folder_name+"/params3.txt", fit_params1)
+        else:
+            print("Improper inputs")
     
     ### SHORTCUTS
     elif action=="bfcs":
@@ -388,21 +426,21 @@ while True:
         
         try:
             #apply background to data and reference
-            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
-            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
+            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
             #apply chirp correction to both data and reference
-            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},apply_all=True)
+            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=0)
             data_handler.switch_data_ref()
-            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},apply_all=True)
+            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=1)
             data_handler.switch_data_ref()
             
             #subtract
             surface_to_subtract = data_handler.reference_surfaces[ref_index_default]
-            data_handler.apply(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},apply_all=True)
+            data_handler.apply_one(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},default=0)
             
         except Exception as e:
             print("ERROR: Crashed. check constants defined in code for shortcuts")
@@ -413,16 +451,18 @@ while True:
         
         try:
             #apply background to data and reference
-            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
-            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
+            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
+            data_handler.delta_As[0].original_signal = data_handler.delta_As[0].signal
+            
             #apply chirp correction to both data and reference
-            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},apply_all=True)
+            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=0)
             data_handler.switch_data_ref()
-            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},apply_all=True)
+            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=1)
             data_handler.switch_data_ref()
             
         except Exception as e:
@@ -430,13 +470,32 @@ while True:
             print(e)
         
         
+    elif action=="bfs":
+        print("This is a shortcut: Make sure you hard code proper constants or will crash")
+        
+        try:
+            #apply background to data and reference
+            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
+            
+            #fit XPM
+            data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
+            
+            #subtract
+            surface_to_subtract = data_handler.reference_surfaces[ref_index_default]
+            data_handler.apply_one(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},default=0)
+            
+        except Exception as e:
+            print("ERROR: Crashed. check constants defined in code for shortcuts")
+            print(e)
+            
     elif action=="bf":
         print("This is a shortcut: Make sure you hard code proper constants or will crash")
         
         try:
             #apply background to data and reference
-            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
-            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},apply_all=True)
+            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
