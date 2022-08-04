@@ -41,28 +41,76 @@ cdict = {'red': ((0.0, 0.0, 0.0),
 
 my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
+def my_assert(condition, msg=None):
+    '''
+    Aborts if condition is false
+    '''
+    if ~condition:
+        print("Assertion false")
+        if msg!=None:
+            print(msg)
+        os.abort()
+
 class TimeTrace:
     wavelength = None
     times = np.array([])
     signal = np.array([])
     def __init__(self,wavelength_in,times_in,signal_in):
+        '''
+        Constructor for TimeTrace that represents a time trace of a specific wavelength
+        wavelength_in : wavelength of the time trace
+        times_in : time axis (not necessarilly uniformly distributed)
+        signal_in : time trace signal corresponding to times_in
+        '''
         self.wavelength = wavelength_in
         self.times = times_in
         self.signal = signal_in
+    
+    def check_internal(self):
+        '''
+        asserts that internal representation is not broken
+        if TimeTrace conditions are broken, system will abort
+
+        '''
+        my_assert(len(self.times)==len(self.signal), "Time trace time and signal do not have the same dimensions")
+        my_assert(self.wavelength!=None and self.wavelength>=0, "Wavelength value is none or negative")
+        
     def get_wavelength(self):
+        '''
+        return wavelength value that this time trace represents
+        '''
         return self.wavelength
     def get_signal(self):
+        '''
+        return time trace signal as numpy array
+        '''
         return self.signal
     def get_times(self):
+        '''
+        return time axis as numpy array
+        '''
         return self.times
     def shift_time(self,shift):
+        '''
+        Mutator of TimeTrace
+        Shift every time value by shift
+        '''
         self.times += shift
     def set_times(self,new_times):
+        '''
+        Completely reset time axis to new_times
+        '''
         self.times = new_times
+        self.check_internal()
     def set_signal(self,new_signal):
+        '''
+        Completely reset time trace signal to new_signal
+        '''
         self.signal = new_signal
+        self.check_internal()
 
 class DataObject:
+    #self
     name = ""
     signal = np.array([])
     times = np.array([])
@@ -73,20 +121,27 @@ class DataObject:
     w_bounds = (None,None)
     t_bounds = (None,None)
     c_bounds = (None,None)
-    original_signal = np.array([])
-    original_wavelengths = np.array([])
-    original_times = np.array([])
     chirp_corrected = False
+    
     def resetTimeTraces(self):
+        '''
+        Recreate all TimeTraces in time_traces from current self.signal and self.times
+        '''
         # reset time traces
         self.time_traces = []
         for w_i in range(len(self.wavelengths)):
            wavelength = self.wavelengths[w_i]
            self.time_traces.append(TimeTrace(wavelength,self.times,self.signal[:,w_i]))
     def shiftTimeTraces(self, shift):
+        '''
+        Shift all the time axes of TimeTraces by shift
+        '''
         for time_trace in self.time_traces:
             time_trace.shift_time(shift)
     def timeTracesCutWavelengths(self, min_index, max_index):
+        '''
+        Cut out the wavelengths from time_traces between index min_index and max_index from original self.wavelengths
+        '''
         # assumes self.wavelengths already has wavelengths cut from it
         self.time_traces = self.time_traces[:min_index]+self.time_traces[max_index:]
     def __init__(self,wavelengths_in,times_in,signal_in,name):
@@ -114,9 +169,19 @@ class DataObject:
             os.abort()
             
     def CreateFromFile(filename):
+        '''
+        returns new DataObject based on the file filneame
+        filename should have the format where first column represents the wavelength axis and first row represents the time axis
+        all other value should be the corresponding delta A signal values corresponding to the respective wavelength row and time column
+        '''
         wavelengths_in, times_in, signal_in = helpers.read_file(filename)
         return DataObject(wavelengths_in, times_in, signal_in,filename)
     def average(datas):
+        '''
+        create the average across the list of datas
+        The wavelength axes and time axes must match. We will print an error if the axes values are not close enough.
+        
+        '''
         if len(datas)==0:
             print("Error: No data")
             return
@@ -138,14 +203,31 @@ class DataObject:
         else:
             print("Error: Axes do not match for average candidates")
     def get_name(self):
+        '''
+        return the name of the data object which is its filename
+        '''
         return self.name
     def get_w(self):
+        '''
+        return the wavelength axis of this data object
+        '''
         return self.wavelengths
     def get_t(self):
+        '''
+        return the time axis of this data object
+        '''
         return self.times
     def get_signal(self):
+        '''
+        return the signal matrix of this data object
+        '''
         return self.signal
     def find_t_peak(self, wavelength=None,t_bounds=None):
+        '''
+        return the time at which the maximum signal occurs for wavelength within t_bounds
+        if wavelength is None, assume current_w
+        if t_bounds is None, assume t_axis_bounds
+        '''
         # return the time at which the max occurs in the range of t_bounds
         if wavelength==None:
             wavelength = self.current_w
@@ -162,6 +244,10 @@ class DataObject:
         peak_index = time_min_index + np.argmax(timeTrace.signal[time_min_index:time_max_index])
         return timeTrace.times[peak_index]
     def plot_color(self):
+        '''
+        plot the 2D plot of the signal where time is vertical axis and wavelength is horizontal axis
+        If chirp correction has been performed, the time axis across different wavelengths is not shared, so we will interpolate values for each wavelength spectra
+        '''
         plt.figure()
         if self.c_bounds==None or self.c_bounds[0]==None or self.c_bounds[1]==None:
             # vmin=.001, vmax=.004
@@ -179,31 +265,17 @@ class DataObject:
         plt.axis([self.w_bounds[0], self.w_bounds[1], self.t_bounds[0], self.t_bounds[1]])
         plt.show()
     def plot_wavelength_crosssection(self,label=None):
+        '''
+        plot wavelength crosssection at t=current_t
+        If chirp correction was performed, all time axes are shifted by different amounts, so we will interpolate
+        '''
         plt.figure()
         if self.chirp_corrected:
             interpolated_spectra = []
-            # error = []
             for w_i in range(len(self.wavelengths)):
                 time_trace = self.time_traces[w_i]
-                interpolated_spectra.append(np.interp(self.current_t, time_trace.times, time_trace.signal))
-                # # if np.sum(np.isnan(time_trace.signal))>40:
-                # #     plt.figure()
-                # #     plt.plot(time_trace.times, time_trace.signal)
-                # #     plt.plot(self.original_times, self.original_signal[:,w_i])
-                # #     plt.scatter([self.current_t],[np.interp(self.current_t, time_trace.times, time_trace.signal)])
-                # #     plt.xlim(self.t_bounds[0],self.t_bounds[1])
-                # #     plt.title(str(self.wavelengths[w_i]))
-                # #     plt.show()
-                    
-                # #     error_x.append(self.wavelengths[w_i])
-                # #     error_y.append(0)
-                # error.append(np.sum(np.isnan(time_trace.signal)))
-            # error = np.array(error)
-            # error = error/abs(np.nanmax(error))
-            # error = error*abs(np.nanmax(interpolated_spectra))
-            
+                interpolated_spectra.append(np.interp(self.current_t, time_trace.times, time_trace.signal))            
             plt.scatter(self.wavelengths, interpolated_spectra, s=1, marker=".")
-            # plt.scatter(self.wavelengths, error, c='r', s=1, marker=".")
             plt.title(self.name + ": Interpolated Time = " + str(self.current_t))
         else:
             cut_index = helpers.find_index(self.times, self.current_t)
@@ -216,6 +288,10 @@ class DataObject:
         plt.ylabel("\Delta A")
         plt.show()
     def plot_time_crosssection(self,label=None):
+        '''
+        plot time crosssection at w=current_w
+        If chirp correction was performed, the exact time axis will be used, no interpolation
+        '''
         plt.figure()
         w_i = helpers.find_index(self.wavelengths, self.current_w)
         time_trace = self.time_traces[w_i]
@@ -231,8 +307,11 @@ class DataObject:
         plt.ylabel("$\Delta A$")
         plt.show()
     def change_waxis(self, new_range):
-        # accepts None, (None,#), (#,None), (#,#)
-        # None will be replaced with current bound
+        '''
+        change the wavelength axis to provided new_range
+        new_range should be None, (None,#), (#,None), or (#,#)
+        None will be replaced with current bound values
+        '''
         if new_range!=None:
             low = new_range[0]
             high = new_range[1]
@@ -242,8 +321,11 @@ class DataObject:
                 high=self.w_bounds[1]
             self.w_bounds = (low,high)
     def change_taxis(self, new_range):
-        # accepts None, (None,#), (#,None), (#,#)
-        # None will be replaced with current bound
+        '''
+        change the time axis to the provided new_range
+        new_range should be None, (None,#), (#,None), or (#,#)
+        None will be replaced with current bound values
+        '''
         if new_range!=None:
             low = new_range[0]
             high = new_range[1]
@@ -253,6 +335,11 @@ class DataObject:
                 high=self.t_bounds[1]
             self.t_bounds = (low,high)
     def change_caxis(self, new_range):
+        '''
+        changes the color axis to the provided new_range
+        accepts None, (None,#), (#,None), (#,#)
+        None will be replaced with current bound
+        '''
         # accepts None, (None,#), (#,None), (#,#)
         # None will be replaced with current bound
         if new_range!=None:
@@ -264,10 +351,23 @@ class DataObject:
                 high=self.c_bounds[1]
             self.c_bounds = (low,high)
     def change_current_t(self, new_t):
+        '''
+        Change current cursor location for time to new_t
+        '''
         self.current_t = new_t
     def change_current_w(self, new_w):
+        '''
+        Change current cursor location for wavelength to new_w
+        '''
         self.current_w = new_w
     def reset_axis(self, which_axis):
+        '''
+        Reset axis specified by which_axis
+        0 -> Reset wavelength axis
+        1 -> Reset time axis
+        2 -> Reset color axis
+        3 -> Reset all axis
+        '''
         if which_axis==0: #waxis
             self.w_bounds = (np.min(self.wavelengths),np.max(self.wavelengths))
         elif which_axis==1: #taxis
@@ -281,15 +381,16 @@ class DataObject:
         else:
             print("Error: Value must be 0,1,2,3")
     def reset_data(self):
-        self.signal = self.original_signal
-        self.times = self.original_times
-        self.wavelengths = self.original_wavelengths
-        self.current_w = helpers.avg(self.wavelengths.min(),self.wavelengths.max())
-        self.current_t = helpers.avg(self.times.min(),self.times.max())
-        self.resetTimeTraces()
-        self.reset_axis(3) 
+        '''
+        Reset data from original data read from file filename
+        '''
+        wavelengths_in, times_in, signal_in = helpers.read_file(self.filename)
+        self.__init__(wavelengths_in, times_in, signal_in, self.filename)
     
     def remove_spikes(self, width, factor):
+        '''
+        Reset data from original data read from file filename
+        '''
         assert ~self.chirp_corrected, "Chirp correction was already performed so time traces are shifted"
         
         half_width = int(width/2);
@@ -302,10 +403,16 @@ class DataObject:
                     self.signal[t,w] = float("nan")
         self.resetTimeTraces()
     def shift_time(self,uniform_time_shift):
+        '''
+        Shift time axis by uniform_time_shift
+        '''
         self.times += uniform_time_shift
         self.time_bounds = (self.time_bounds[0]+uniform_time_shift,self.time_bounds[1]+uniform_time_shift)
         self.shiftTimeTraces(uniform_time_shift)
     def subtract_surface(self,surface_to_subtract, Er, Es, f):
+        '''
+        Subtract surface_to_subtract from this surface with the factor Es*f/Er
+        '''
         assert ~self.chirp_corrected, "Chirp correction was already performed so time traces are shifted"
         
         if (len(surface_to_subtract.wavelengths)!=len(self.wavelengths)):
@@ -321,7 +428,10 @@ class DataObject:
                     self.signal[delta_A_index,:] -= (Es*f/Er) * surface_to_subtract.signal[i,:]
         self.resetTimeTraces()
     def cut_w(self,cut_min, cut_max):
-        
+        '''
+        Remove the range cut_min and cut_max from wavelength axis (will mutate 2D signal and time_traces)
+        Will prompt user whether they should be cut out or replaced Nan
+        '''
         cut_min_index = helpers.find_index(self.wavelengths, cut_min)
         cut_max_index = helpers.find_index(self.wavelengths, cut_max)
         nan_flag = input("replace with nan? otherwise, will delete spectrum. (y/n)")
@@ -332,6 +442,10 @@ class DataObject:
             self.wavelengths = np.concatenate((self.wavelengths[:cut_min_index],self.wavelengths[cut_max_index:]))       
         self.timeTracesCutWavelengths(cut_min_index,cut_max_index)
     def remove_nan_t(self):
+        '''
+        Remove any times with any Nan values in its spectrum
+        Should be before chirp correction since time-axis won't be shared otherwise
+        '''
         assert ~self.chirp_corrected, "Chirp correction was already performed so time traces are shifted"
         
         remove = []
@@ -349,6 +463,10 @@ class DataObject:
         self.resetTimeTraces()
         print("New dimension:", self.signal.shape)
     def remove_nan_w(self):
+        '''
+        Remove any wavelengths with any Nan values in its spectrum
+        Should be before chirp correction since wavvelength-axis won't be shared otherwise
+        '''
         assert ~self.chirp_corrected, "Chirp correction was already performed so time traces are shifted"
         
         remove = []
@@ -366,6 +484,10 @@ class DataObject:
         self.resetTimeTraces()
         print("New dimension is " + str(self.signal.shape))
     def background_correction(self, back_min, back_max):
+        '''
+        Perform background correction by taking times between back_min and back_max
+        Should be performed before chirp correction (techincally code would work but not recommended)
+        '''
         assert ~self.chirp_corrected, "Chirp correction was already performed so time traces are shifted"
         
         # background correction for data
@@ -374,12 +496,20 @@ class DataObject:
         self.resetTimeTraces()
 
     def play_over_time(self):
+        '''
+        Display the wavelength crosssections over time
+        Warning, could take long if there are many times
+        '''
         original_time = self.current_t
         for time in self.get_t():
             self.current_t = time
             self.plot_wavelength_crosssection()
         self.current_t = original_time
     def chirp_correction(self, func, popt):
+        '''
+        Chirp correct based on the t0 function determined by fitting to reference surface
+        i.e. make sure to call 'fit ours' beforehand
+        '''
         new_time_min = float('inf')
         new_time_max = -float('inf')
         for w_i in range(len(self.wavelengths)):
@@ -396,55 +526,37 @@ class DataObject:
         
         # precision is not consistent so take the low/high ends separately and extend
         low_end_precision = abs(self.times[1]-self.times[0])
-        # high_end_precision = abs(self.times[-1]-self.times[-2])
-        # min_precision = min(low_end_precision,high_end_precision)
-        
-        # new_times = np.copy(self.times)
-        # if new_time_min < np.min(self.times):
-        #     low_end = new_time_min + low_end_precision * np.array(range(math.ceil((np.min(self.times)-new_time_min)/low_end_precision)))
-        #     new_times = np.append(low_end,new_times)
-        # if new_time_max > np.max(self.times):
-        #     high_end = np.max(self.times) + high_end_precision * np.array(range(math.ceil((new_time_max-np.max(self.times))/high_end_precision)))
-        #     new_times = np.append(new_times,high_end)
+        high_end_precision = abs(self.times[-1]-self.times[-2])
         
         new_times = np.append(np.arange(new_time_min,min(self.times),low_end_precision),np.copy(self.times))
-        
-        # new_times = np.arange(new_time_min,new_time_max,min_precision)
+        new_times = np.append(new_times, np.arange(max(self.times),new_time_max,high_end_precision))
             
         new_signal = np.empty((len(new_times),len(self.wavelengths)))
         new_signal[:] = np.nan
-        # print(t0,min_precision)
         
         for w_i in range(len(self.wavelengths)):
             wavelength = self.wavelengths[w_i]
-            speed_of_light = 2.99792458e5 # nm / ps
-            current_freq = 2*math.pi*speed_of_light/wavelength # rad/ps^-1
+            current_freq = helpers.convert_to_ang_freq(wavelength) # rad/ps^-1
             t0 = func(current_freq, *popt)
             current_times = self.times-t0
+            current_signal = self.time_traces[w_i].signal
             
-            store_times = {} # take average in case points are clustered. index to list of values
-            for t_i in range(len(current_times)):
-                time = current_times[t_i]
-                new_time_index = helpers.find_index(new_times, time)
-                if new_time_index in store_times:
-                    store_times[new_time_index].append(self.signal[t_i,w_i])
-                else:
-                    store_times[new_time_index] = [self.signal[t_i,w_i]]
+            new_signal[:, w_i] = np.interp(new_times, current_times, current_signal)
             
-            for new_time_index in store_times:
-                # take averages of all values close to this time
-                new_signal[new_time_index,w_i] = np.nanmean(np.array(store_times[new_time_index]))
-            
-            self.time_traces[w_i].set_times(self.times-t0)
+            self.time_traces[w_i].shift_time(-t0)
         
         self.times = new_times
         self.signal = new_signal
-        self.resetTimeTraces()
         
         # reset all axis
         self.reset_axis(3)
         self.chirp_corrected = True
     def fitRateModel1(self, w_min, w_max, t_min, t_max, interval, folder_name):
+        '''
+        fit rate model assuming current signal has been background corrected, fitted, chirp corrected, and reference-subtracted
+        returns the fitted parameters and saves fitted plot if success
+        prints error if fit did not succed
+        '''
         outputParams = {}
         
         wavelengths_to_fit = np.arange(w_min,w_max,interval)
@@ -492,7 +604,12 @@ class DataObject:
         return outputParams
     
     def fitRateModel2(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
-        # have not chirp corrected
+        '''
+        fit rate model assuming current signal has been background corrected, fitted, and reference-subtracted
+        assumes NOT CHIRP CORRECTED
+        returns the fitted parameters and saves fitted plot if success
+        prints error if fit did not succed
+        '''
         
         outputParams = {}
         
@@ -562,7 +679,12 @@ class DataObject:
         return outputParams
     
     def fitRateModel3(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
-        # have not chirp corrected and XPM signal is left
+        '''
+        fit rate model assuming current signal has been background corrected, fitted
+        assumes NOT CHIRP CORRECTED NOR REFERENCE-SUBTRACTED
+        returns the fitted parameters and saves fitted plot if success
+        prints error if fit did not succed
+        '''
         
         outputParams = {}
         
