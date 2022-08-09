@@ -246,7 +246,7 @@ while True:
         data_handler.switch_data_ref()
         print("Data/Ref inverted" if data_handler.switched_data_ref else "Data/Ref NOT inverted")
         
-    elif action=="fit rate model":
+    elif action=="fit rate model 1":
         print("fitting rate model...")
         folder_name = "rate model fitting (chirp_corr, subtracted)/model1"
         
@@ -255,7 +255,7 @@ while True:
         t_min, t_max = helpers.ask_range(float, default=(-1,1.5), add_text="Specify time range to fit")
         
         if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
-            fit_params1 = data_handler.apply_one(True,"fitRateModel1",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "folder_name": folder_name})
+            fit_params1 = data_handler.apply_one(True,"fit_rate_model1",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "folder_name": folder_name})
             DataHandler.write_out_params(folder_name+"/params1.txt", fit_params1)
         else:
             print("Improper inputs")
@@ -270,7 +270,7 @@ while True:
         
         if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
             ref = data_handler.reference_surfaces[1]
-            fit_params1 = data_handler.apply_one(True,"fitRateModel2",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
+            fit_params1 = data_handler.apply_one(True,"fit_rate_model2",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
             DataHandler.write_out_params(folder_name+"/params2.txt", fit_params1)
         else:
             print("Improper inputs")
@@ -285,7 +285,7 @@ while True:
         
         if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
             ref = data_handler.reference_surfaces[1]
-            fit_params1 = data_handler.apply_one(True,"fitRateModel3",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
+            fit_params1 = data_handler.apply_one(True,"fit_rate_model3",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
             DataHandler.write_out_params(folder_name+"/params3.txt", fit_params1)
             
         else:

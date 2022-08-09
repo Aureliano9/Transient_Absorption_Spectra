@@ -16,6 +16,11 @@ from scipy.optimize import curve_fit
 import os
 import helpers
 
+#### NOTE ######
+# data handler contains multiple data objects 
+# data objects represent 2D signal for data or reference and stores independent time axes for different wavelengths
+# To store these independent time axes, we will store a TimeTrace per wavelength which is composed of the time spetra and time axis
+
 
 cdict = {'red': ((0.0, 0.0, 0.0),
                  (0.1, 0.5, 0.5),
@@ -52,9 +57,11 @@ def my_assert(condition, msg=None):
         os.abort()
 
 class TimeTrace:
+    # TimeTrace internal variables
     wavelength = None
     times = np.array([])
     signal = np.array([])
+    
     def __init__(self,wavelength_in,times_in,signal_in):
         '''
         Constructor for TimeTrace that represents a time trace of a specific wavelength
@@ -110,7 +117,7 @@ class TimeTrace:
         self.check_internal()
 
 class DataObject:
-    #self
+    # DataObject internal variables
     name = ""
     signal = np.array([])
     times = np.array([])
@@ -123,7 +130,7 @@ class DataObject:
     c_bounds = (None,None)
     chirp_corrected = False
     
-    def resetTimeTraces(self):
+    def reset_time_traces(self):
         '''
         Recreate all TimeTraces in time_traces from current self.signal and self.times
         '''
@@ -132,13 +139,13 @@ class DataObject:
         for w_i in range(len(self.wavelengths)):
            wavelength = self.wavelengths[w_i]
            self.time_traces.append(TimeTrace(wavelength,self.times,self.signal[:,w_i]))
-    def shiftTimeTraces(self, shift):
+    def shift_time_traces(self, shift):
         '''
         Shift all the time axes of TimeTraces by shift
         '''
         for time_trace in self.time_traces:
             time_trace.shift_time(shift)
-    def timeTracesCutWavelengths(self, min_index, max_index):
+    def time_traces_cut_wavelengths(self, min_index, max_index):
         '''
         Cut out the wavelengths from time_traces between index min_index and max_index from original self.wavelengths
         '''
@@ -156,7 +163,7 @@ class DataObject:
         self.c_bounds = (None,None)
         
         # create dictionary for time slices
-        self.resetTimeTraces()
+        self.reset_time_traces()
         
         # keep copy of original that will never be mutated
         self.original_signal = np.copy(self.signal)
@@ -168,7 +175,7 @@ class DataObject:
             print("The dimension of wavelength/time does not match signal")
             os.abort()
             
-    def CreateFromFile(filename):
+    def create_from_file(filename):
         '''
         returns new DataObject based on the file filneame
         filename should have the format where first column represents the wavelength axis and first row represents the time axis
@@ -204,7 +211,12 @@ class DataObject:
             print("Error: Axes do not match for average candidates")
     def get_name(self):
         '''
-        return the name of the data object which is its filename
+        return the name of th
+    
+    
+    
+    
+    data object which is its filename
         '''
         return self.name
     def get_w(self):
@@ -401,14 +413,14 @@ class DataObject:
                 std = np.nanstd(self.signal[t,w-half_width:w+half_width])
                 if (not np.isnan(mean) and abs(self.signal[t,w]-mean)>factor*std):
                     self.signal[t,w] = float("nan")
-        self.resetTimeTraces()
+        self.reset_time_traces()
     def shift_time(self,uniform_time_shift):
         '''
         Shift time axis by uniform_time_shift
         '''
         self.times += uniform_time_shift
         self.time_bounds = (self.time_bounds[0]+uniform_time_shift,self.time_bounds[1]+uniform_time_shift)
-        self.shiftTimeTraces(uniform_time_shift)
+        self.shift_time_traces(uniform_time_shift)
     def subtract_surface(self,surface_to_subtract, Er, Es, f):
         '''
         Subtract surface_to_subtract from this surface with the factor Es*f/Er
@@ -426,7 +438,7 @@ class DataObject:
                 if subtract_time>=min_time and subtract_time<=max_time: # check if subtract surface is out of bounds for self
                     delta_A_index = helpers.find_index(self.times, subtract_time)
                     self.signal[delta_A_index,:] -= (Es*f/Er) * surface_to_subtract.signal[i,:]
-        self.resetTimeTraces()
+        self.reset_time_traces()
     def cut_w(self,cut_min, cut_max):
         '''
         Remove the range cut_min and cut_max from wavelength axis (will mutate 2D signal and time_traces)
@@ -440,7 +452,7 @@ class DataObject:
         else:
             self.signal = np.concatenate((self.signal[:,:cut_min_index],self.signal[:,cut_max_index:]), axis=1)
             self.wavelengths = np.concatenate((self.wavelengths[:cut_min_index],self.wavelengths[cut_max_index:]))       
-        self.timeTracesCutWavelengths(cut_min_index,cut_max_index)
+        self.time_traces_cut_wavelengths(cut_min_index,cut_max_index)
     def remove_nan_t(self):
         '''
         Remove any times with any Nan values in its spectrum
@@ -460,7 +472,7 @@ class DataObject:
             else:
                 self.signal = np.concatenate((self.signal[:t,:],self.signal[t+1:,:]),axis=0)
                 self.times = np.concatenate((self.times[:t],self.times[t+1:]))
-        self.resetTimeTraces()
+        self.reset_time_traces()
         print("New dimension:", self.signal.shape)
     def remove_nan_w(self):
         '''
@@ -481,7 +493,7 @@ class DataObject:
             else:
                 self.signal = np.concatenate((self.signal[:,:w],self.signal[:,w+1:]),axis=1)
                 self.wavelengths = np.concatenate((self.wavelengths[:w],self.wavelengths[w+1:]))
-        self.resetTimeTraces()
+        self.reset_time_traces()
         print("New dimension is " + str(self.signal.shape))
     def background_correction(self, back_min, back_max):
         '''
@@ -493,7 +505,7 @@ class DataObject:
         # background correction for data
         background_index = (helpers.find_index(self.times,back_min),helpers.find_index(self.times,back_max))
         self.signal -= np.nanmean(self.signal[background_index[0]:background_index[1],:],axis=0)
-        self.resetTimeTraces()
+        self.reset_time_traces()
 
     def play_over_time(self):
         '''
@@ -551,7 +563,7 @@ class DataObject:
         # reset all axis
         self.reset_axis(3)
         self.chirp_corrected = True
-    def fitRateModel1(self, w_min, w_max, t_min, t_max, interval, folder_name):
+    def fit_rate_model1(self, w_min, w_max, t_min, t_max, interval, folder_name):
         '''
         fit rate model assuming current signal has been background corrected, fitted, chirp corrected, and reference-subtracted
         returns the fitted parameters and saves fitted plot if success
@@ -603,7 +615,7 @@ class DataObject:
         
         return outputParams
     
-    def fitRateModel2(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
+    def fit_rate_model2(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
         '''
         fit rate model assuming current signal has been background corrected, fitted, and reference-subtracted
         assumes NOT CHIRP CORRECTED
@@ -678,7 +690,7 @@ class DataObject:
         
         return outputParams
     
-    def fitRateModel3(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
+    def fit_rate_model3(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
         '''
         fit rate model assuming current signal has been background corrected, fitted
         assumes NOT CHIRP CORRECTED NOR REFERENCE-SUBTRACTED
@@ -758,6 +770,8 @@ class DataObject:
         return outputParams
 
 class DataHandler:
+    
+    # Data Handler internal variables
     delta_As = []
     reference_surfaces = []
     parameters = {}
@@ -777,9 +791,9 @@ class DataHandler:
     
     def __init__(self, delta_A_filenames, ref_surface_filenames):
         for filename in delta_A_filenames:
-            self.delta_As.append(DataObject.CreateFromFile(filename))
+            self.delta_As.append(DataObject.create_from_file(filename))
         for filename in ref_surface_filenames:
-            self.reference_surfaces.append(DataObject.CreateFromFile(filename))
+            self.reference_surfaces.append(DataObject.create_from_file(filename))
     def apply(self,is_delta_A, method, kwargs, apply_all=False):
         list_of_data = self.delta_As if is_delta_A else self.reference_surfaces
         if len(list_of_data)==1:

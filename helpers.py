@@ -20,6 +20,12 @@ from scipy import fftpack
 
 # return matrix from file
 def read_file(filename):
+    '''
+    Return a tuple of (wavelengths, times, signal) based on file called filename
+    File should in the format where first row is time axis and first column is wavelength axis
+    wavelengths and times are these axes
+    signal is the 2D signal for the corresponding wavelengths and times
+    '''
     wavelengths = []
     times = []
     signal = []
@@ -70,6 +76,10 @@ def read_file(filename):
     return (wavelengths,times,signal)
     
 def avg(a,b):
+    '''
+    return average of two values
+
+    '''
     return (a+b)/2.
 
 def find_index(arr, value):
