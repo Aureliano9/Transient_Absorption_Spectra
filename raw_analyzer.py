@@ -118,17 +118,17 @@ while True:
         
     elif action=="waxis":
         print("changing wavelength axis...")
-        new_range = helpers.ask_range(float)
+        new_range = helpers.ask_range(float, "Specify range of wavelength to display")
         data_handler.apply(True,"change_waxis",{'new_range': new_range})
         
     elif action=="taxis":
         print("changing time axis...")
-        new_range = helpers.ask_range(float)
+        new_range = helpers.ask_range(float, "Specify range of time to display")
         data_handler.apply(True,"change_taxis",{'new_range': new_range})
         
     elif action=="caxis":
         print("changing color axis...")
-        new_range = helpers.ask_range(float)
+        new_range = helpers.ask_range(float, "Specify color range to display")
         data_handler.apply(True,"change_caxis",{'new_range': new_range})
         
     elif action=="reset axis":
@@ -188,7 +188,7 @@ while True:
         
     elif action=="cut w":
         print("cutting wavelength range...") # ask user nan/delete
-        cut_min, cut_max = helpers.ask_range(float)
+        cut_min, cut_max = helpers.ask_range(float, "Specify range to cut out")
         data_handler.apply(True,"cut_w",{"cut_min": cut_min, "cut_max": cut_max})
         
     elif action=="spikes":
@@ -377,4 +377,3 @@ while True:
         
     else:
         print("error, did not recognize command")
-    

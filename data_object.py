@@ -275,7 +275,7 @@ class DataObject:
         plt.plot([self.current_w,self.current_w],[self.times.min(),self.times.max()])
         plt.plot([self.wavelengths.min(),self.wavelengths.max()],[self.current_t, self.current_t])
         plt.axis([self.w_bounds[0], self.w_bounds[1], self.t_bounds[0], self.t_bounds[1]])
-        plt.show()
+        plt.show(block=True)
     def plot_wavelength_crosssection(self,label=None):
         '''
         plot wavelength crosssection at t=current_t
