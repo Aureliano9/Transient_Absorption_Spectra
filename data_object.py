@@ -55,6 +55,8 @@ def my_assert(condition, msg=None):
         if msg!=None:
             print(msg)
         os.abort()
+        
+############# TIME TRACE ##############
 
 class TimeTrace:
     # TimeTrace internal variables
@@ -115,6 +117,8 @@ class TimeTrace:
         '''
         self.signal = new_signal
         self.check_internal()
+
+############# DATA OBJECT ##############
 
 class DataObject:
     # DataObject internal variables
@@ -275,7 +279,7 @@ class DataObject:
         plt.plot([self.current_w,self.current_w],[self.times.min(),self.times.max()])
         plt.plot([self.wavelengths.min(),self.wavelengths.max()],[self.current_t, self.current_t])
         plt.axis([self.w_bounds[0], self.w_bounds[1], self.t_bounds[0], self.t_bounds[1]])
-        plt.show(block=True)
+        plt.show()
     def plot_wavelength_crosssection(self,label=None):
         '''
         plot wavelength crosssection at t=current_t
@@ -768,26 +772,29 @@ class DataObject:
             outputParams[w] = popt
         
         return outputParams
+    
+############# DATA HANDLER ##############
 
 class DataHandler:
     
     # Data Handler internal variables
-    delta_As = []
-    reference_surfaces = []
-    parameters = {}
-    switched_data_ref = False
+    delta_As = [] # list of DataObjects that represent delta_As
+    reference_surfaces = [] # list of DataObjects that represent reference surfaces
+    parameters = {} # dictionary stores fitted parameters for time zero chirp correction where the key is wavelength and value is a list of the fitted parameters
+    switched_data_ref = False # toggle, whether we switched delta_As and reference_surfaces
     
-    # For fit
-    t0_func = staticmethod(helpers.second)
-    t0_popt = None
-    c1_func = staticmethod(helpers.fifth)
-    c1_popt = None
-    c2_func = staticmethod(helpers.fifth)
-    c2_popt = None
-    c3_func = staticmethod(helpers.fifth)
-    c3_popt = None
-    tau1_func = staticmethod(helpers.fifth)
-    tau1_popt = None
+    # Functions to fit against t0, c1, c2, c3, tau1 for chirp correction
+    t0_func = staticmethod(helpers.second) # quadratic function fit best
+    c1_func = staticmethod(helpers.fifth) # randomly picked fifth
+    c2_func = staticmethod(helpers.fifth) # randomly picked fifth
+    c3_func = staticmethod(helpers.fifth) # randomly picked fifth
+    tau1_func = staticmethod(helpers.fifth) # randomly picked fifth
+    
+    c1_popt = None # fitted parameters for c1_popt will be stored here after chirp_correction is called
+    c2_popt = None # fitted parameters for c2_func will be stored here after chirp_correction is called
+    c3_popt = None # fitted parameters for c3_func will be stored here after chirp_correction is called
+    t0_popt = None # fitted parameters for t0_func will be stored here after chirp_correction is called
+    tau1_popt = None # fitted parameters for tau1_func will be stored here after chirp_correction is called
     
     def __init__(self, delta_A_filenames, ref_surface_filenames):
         for filename in delta_A_filenames:
@@ -849,9 +856,12 @@ class DataHandler:
         # determine wavelength range
         min_w_index = helpers.find_index(ref.wavelengths,w_range[0])
         max_w_index = helpers.find_index(ref.wavelengths,w_range[1])
+        
+        # ignore this wavelength range since fitting will fail here (manually set to 410-430)
         min_w_index_ignore = helpers.find_index(ref.wavelengths,410)
         max_w_index_ignore = helpers.find_index(ref.wavelengths,430)
         
+        # creating w_indices here, which will be a list of wavelength indices that we will try to fit
         if min_w_index<min_w_index_ignore and max_w_index>max_w_index_ignore:
             w_indices = list(range(min_w_index,min_w_index_ignore))
             w_indices += list(range(max_w_index_ignore,max_w_index))
@@ -865,28 +875,36 @@ class DataHandler:
         else:
             print("Error: have a bug with intervals")
         
+        # plot_flag is True iff we want to plot the fitting plots for all wavelengths
         plot_flag = False if skip_plot_prompt else helpers.ask_yes_no("Plot all wavelengths?", default=False)
         
         for w_i in w_indices:
+            # get corresponding wavelength, times axis, and signal for the specified time range
             wavelength = ref.wavelengths[w_i]
             sliced_times = ref.times[min_t_index:max_t_index]
             sliced_signal = ref.signal[min_t_index:max_t_index,w_i]
             
+            # find the time where maximum occurs in specified time range
             t0 = ref.find_t_peak(wavelength,t_range)
             
+            # initial parameters, important to manually set
             initial_c1 = -4.79227948e-04
             initial_c2 = 3.87793025e-05
             initial_c3 = -6.49229051e-06
             tau1 = 1.36241557e-01
             
             try:
+                # try to fit
                 popt, pcov = curve_fit(helpers.ours, sliced_times, sliced_signal, [initial_c1, initial_c2, initial_c3, tau1, t0])
-                pcov_mag = np.linalg.norm(np.array(pcov))
+                pcov_mag = np.linalg.norm(np.array(pcov)) # represents error
                 if pcov_mag > .01:
+                    # throw away the fit if it is too large
                     raise RuntimeError() 
                 
-                # fit worked
-                self.parameters[wavelength] = popt
+                # will come here if fit worked reasonably well
+                self.parameters[wavelength] = popt # store the fitted parameters into self.parameters
+                
+                # plot if plot_flag is toggled
                 if plot_flag:
                     fitted = helpers.ours(sliced_times, *popt)
                     plt.figure()
@@ -895,9 +913,11 @@ class DataHandler:
                     plt.title("$\lambda=" + str(wavelength) + " , initial\_t_0=" + str(t0) + " , final\_t_0=" + str(popt[4]) + " , cov=" + str(pcov_mag) + "$")
                     plt.show()
             except Exception:
+                # will come here if fit was not good enough or something crashed
                 print("Ignoring wavelength " + str(wavelength))
-    
-        chosen_freqs = []
+        
+        # plot how the fit parameters vary across the wavelengths
+        chosen_freqs = [] # converting wavelength to frequency
         c1s = []
         c2s = []
         c3s = []

@@ -83,12 +83,23 @@ def avg(a,b):
     return (a+b)/2.
 
 def find_index(arr, value):
+    '''
+    find the index of element in arr that is closest to the value value
+
+    '''
     return np.argmin(np.abs(arr-value))
 
 def heaviside(x, shift, magnitude):
+    '''
+    return the heaviside step function where the step occurs at shift with magnitude magnitude
+
+    '''
     return magnitude * np.heaviside(x,shift)
 
 def fit_heaviside(x,y):
+    '''
+    fit the 
+    '''
     output_index = 0 #default to zero shift
     best_loss = float('inf')
     for i in range(1,len(x)):
@@ -157,6 +168,10 @@ def chirp_correction(times,wavelengths,delta_A):
     return output
 
 def ask_value(type, label="value", default = None, override_text = None):
+    '''
+    asks for a single value from user and returns it
+    '''
+    
     if override_text==None:
         value = input("Enter " + label + ": ")
     else:
@@ -167,6 +182,10 @@ def ask_value(type, label="value", default = None, override_text = None):
         return type(value)
 
 def ask_range(type, default=(None,None), add_text = None):
+    '''
+    asks for a range from user and returns it as a tuple (min,max)
+    '''
+    
     if add_text!=None:
         print(add_text)
         
@@ -185,6 +204,10 @@ def ask_range(type, default=(None,None), add_text = None):
     return (min_value, max_value)
 
 def ask_which_layer(list_of_data):
+    '''
+    asks for which item in list_of_data user would like and returns the index
+    If user inputs invalid index value, returns None
+    '''
     filenames = []
     for data in list_of_data:
         filenames.append(data.get_name())
@@ -198,6 +221,9 @@ def ask_which_layer(list_of_data):
         return None
     
 def ask_yes_no(text, default=False):
+    '''
+    asks for a boolean from user
+    '''
     ans = input(text + "(y/n) ")
     if ans=="y":
         return True
@@ -207,6 +233,11 @@ def ask_yes_no(text, default=False):
         return default
 
 def ask_for_indices(list_of_data):
+    '''
+    Asks for multiple index values in list_of_data user would like
+    If user specifies invalid index, will print an error and ask for more indices
+    Will continue to ask for more indices until empty string is entered
+    '''
     filenames = []
     for data in list_of_data:
         filenames.append(data.get_name())
@@ -223,30 +254,31 @@ def ask_for_indices(list_of_data):
         index = input("Specify index to include: ")
     return output
 
-# def remove_nan(delta_A):
-#     num_t, num_w = delta_A.shape
-#     for w in range(num_w):
-#             for t in range(num_t):
-#                 if np.isnan(delta_A[t,w]):
-#                     if w-1>=0 and w+1<num_w and not np.isnan(delta_A[t,w-1]) and not np.isnan(delta_A[t,w+1]):
-#                         delta_A[t,w] = (delta_A[t,w-1] + delta_A[t,w+1]) / 2.
-#                     if t-1>=0 and t+1<num_t and not np.isnan(delta_A[t-1,w]) and not np.isnan(delta_A[t+1,w]):
-#                         delta_A[t,w] = (delta_A[t-1,w] + delta_A[t+1,w]) / 2.
-#     return delta_A
-
 def gaussian(x, sigma, mu=0, factor=1):
+    '''
+    returns gaussian function
+    multiplies by factor
+    is not normalized
+
+    '''
     g = np.exp(-(x-mu)**2/(2*sigma**2)) #/(sigma*math.sqrt(2*math.pi))
     g = g*factor
     # g /= np.trapz(g)
     return g
 
 def convert_to_ang_freq(wavelength):
-    # convert from wavelength nm to rad/ps-1
+    '''
+    convert wavelength nm to angular frequency rad/ps-1
+    '''
     speed_of_light = 2.99792458e5 # nm / ps
     return 2*math.pi*speed_of_light/wavelength # rad/ps^-1
 
 
 def ours(times, c1, c2, c3, tau1, t0):
+    '''
+    return XPM signal function that we wrote out based on Kovalenko's paper
+    note: there is another XPM function that Kovalenko writes out explicitly but is not symmetric about center, so we primarily use our XPM signal model currently
+    '''
     # beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
     # tau1 = 50e-3 #ps  ##???
     # target_wavelength = 400 #### ADJUST
@@ -261,21 +293,39 @@ def ours(times, c1, c2, c3, tau1, t0):
     return np.exp(-(times-t0)**2/tau1**2)*(c1-c2*2*(times-t0)/tau1**2-c3*(2/tau1**2-4*(times-t0)**2/tau1**4))
 
 def fifth(x, a, b, c, d, e, f):
+    '''
+    return fifth-degree polynomial
+    '''
     return a + b*x + c*x**2 + d*x**3 + e*x**4 + f*x**5
 
 def fourth(x, a, b, c, d, e):
+    '''
+    return fourth-degree polynomial
+    '''
     return a + b*x + c*x**2 + d*x**3 + e*x**4
 
 def third(x, a, b, c, d):
+    '''
+    return third-degree polynomial
+    '''
     return a + b*x + c*x**2 + d*x**3
 
 def second(x, a, b, c):
+    '''
+    return second-degree polynomial
+    '''
     return a + b*x + c*x**2
 
 def first(x, a, b):
+    '''
+    return first-degree polynomial
+    '''
     return a + b*x
 
 def solve_diffeq(t, B2, B3, B4):
+    '''
+    returns solution of differential equation before convolving with gaussian
+    '''
     f = .5 #???
     initial = [1-f,f,0,0]
     C2 = initial[1]
@@ -287,7 +337,7 @@ def solve_diffeq(t, B2, B3, B4):
     x3 = C3*np.exp(-B3*t)-C2*B2/(B2-B3)*np.exp(-B2*t)
     x4 = C2*B2*B3*np.exp(-B2*t)/((B2-B3)*(B2-B4))-C3*B3*np.exp(-B3*t)/(B3-B4)+C4*np.exp(-B4*t)
     
-    # set negative time
+    # for negative times, all population should be at ground state
     for i in range(len(t)):
         if t[i]<=0:
             x1[i] = 1
@@ -299,22 +349,31 @@ def solve_diffeq(t, B2, B3, B4):
     return x1, x2, x3, x4
 
 def convolve_gaussian(t,x,sigma):
-    area = np.trapz(gaussian(t,sigma))
+    '''
+    convolve provided signal x with axis t with the gaussian with radius sigma
+    
+    note: there are 2 methods for convolution - manual and using fourier transform
+    as our time axis may not be uniform we cannot use FFT, so it will be easier to implement with manual convolution, which is what we do here
+    '''
+    area = np.trapz(gaussian(t,sigma)) # calculate area of gaussian on entire time axis for normalization
     output = []
     for i in range(len(t)):
-        value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area))
-        
+        value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area)) # convolve manually
         output.append(value)
     return np.array(output)
 
-def all_convolve_gaussian(extended_t, x1,x2,x3,x4,sigma):
+def all_convolve_gaussian(t_axis, x1,x2,x3,x4,sigma):
+    '''
+    Convolve x1, x2, x3, x4, which share a time axis t_axis, with a gaussian of size sigma 
 
-    x1_blurred = convolve_gaussian(extended_t, x1, sigma)
-    x2_blurred = convolve_gaussian(extended_t, x2, sigma)
-    x3_blurred = convolve_gaussian(extended_t, x3, sigma)
-    x4_blurred = convolve_gaussian(extended_t, x4, sigma)
+    '''
     
+    x1_blurred = convolve_gaussian(t_axis, x1, sigma)
+    x2_blurred = convolve_gaussian(t_axis, x2, sigma)
+    x3_blurred = convolve_gaussian(t_axis, x3, sigma)
+    x4_blurred = convolve_gaussian(t_axis, x4, sigma)
     
+    # plotting convolution result
     # plt.figure()
     # plt.plot(extended_t,x1_blurred)
     # plt.plot(extended_t,x2_blurred)
@@ -325,16 +384,26 @@ def all_convolve_gaussian(extended_t, x1,x2,x3,x4,sigma):
     return x1_blurred,x2_blurred,x3_blurred,x4_blurred
 
 def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
-    # sigma related to tau1
-    left_precision = abs(t[0]-t[1])
-    right_precision = abs(t[len(t)-1]-t[len(t)-2])
-    smallest_precision = min(left_precision, right_precision)
-    if smallest_precision>=sigma:
-        smallest_precision = sigma/10
-    extended_left = min(t)-(len(t)//2+1)*smallest_precision
-    extended_right = max(t)+(len(t)//2+1)*smallest_precision
-    t_extended = np.arange(extended_left, extended_right, smallest_precision)
+    '''
+    The rate model equation that was manually solved by hand
+    t is the time axis we would like values for
+    B2, B3, B4 is the decay rate of the 2nd, 3rd, 4th excited state respectively
+    A1, A2, A3, A4 is the magnitude of each excited state for the signal
+    sigma is the size of the gaussian we will use to smear/blur the differential equation solutions
+    '''
     
+    # note that precision is not uniform on time axis
+    # recreate a time axis that is the smallest precision or tenth of sigma
+    # double length of time axis for convolution padding purposes
+    precisions = np.array(t[1:] - t[:len(t)-1]) # stagger array to get precision at each time step
+    smallest_precision = min(precisions) # find smallest precision
+    if smallest_precision>=sigma: # if precision is smaller than sigma our precision should be smaller
+        smallest_precision = sigma/10
+    extended_left = min(t)-(len(t)//2+1)*smallest_precision # min value for extended time axis
+    extended_right = max(t)+(len(t)//2+1)*smallest_precision # max value for extended time axis
+    t_extended = np.arange(extended_left, extended_right, smallest_precision) # our new extended time axis
+    
+    # create solutions to differential equation
     x1_extended, x2_extended, x3_extended, x4_extended = solve_diffeq(t_extended, B2, B3, B4)    
     
     # plt.figure()
@@ -344,8 +413,13 @@ def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
     # plt.plot(t_extended,x4_extended)
     # plt.show()
     
-    x1_extended, x2_extended, x3_extended, x4_extended = all_convolve_gaussian(t_extended, x1_extended, x2_extended, x3_extended, x4_extended, sigma)
+    # blur solution with gaussian
+    x1_extended = convolve_gaussian(t_extended, x1_extended, sigma)
+    x2_extended = convolve_gaussian(t_extended, x2_extended, sigma)
+    x3_extended = convolve_gaussian(t_extended, x3_extended, sigma)
+    x4_extended = convolve_gaussian(t_extended, x4_extended, sigma)
     
+    # based on x1_extended, x2_extended, x3_extended, x4_extended, interpolate values for time values we actually want in t
     x1 = []
     x2 = []
     x3 = []
@@ -367,10 +441,16 @@ def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
     # plt.plot(t,x4)
     # plt.show()
     
+    # super impose with provided amplitude A1, A2, A3, A4
     superimposed = A1*x1 + A2*x2 + A3*x3 + A4*x4
     return superimposed
 
 def rateModel2(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0):
+    '''
+    same as rateModel but the differential equation solution should be shifted by t0
+
+    '''
+    
     # rate model with no chirp correction
     
     # sigma related to tau1
@@ -383,7 +463,7 @@ def rateModel2(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0):
     extended_right = max(t)+(len(t)//2+1)*smallest_precision
     t_extended = np.arange(extended_left, extended_right, smallest_precision)
     
-    x1_extended, x2_extended, x3_extended, x4_extended = solve_diffeq(t_extended-t0, B2, B3, B4)    
+    x1_extended, x2_extended, x3_extended, x4_extended = solve_diffeq(t_extended-t0, B2, B3, B4)    # shift our differential equation solution 
     
     # plt.figure()
     # plt.plot(t_extended,x1_extended)
@@ -419,7 +499,11 @@ def rateModel2(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0):
     return superimposed
 
 def rateModel3(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0, c1, c2, c3):
+    '''
+    same as rateModel2 but add XPM sigmal with parameters c1, c2, c3
+
+    '''
     # rate model with no chirp correction and without subtracting XPM
     signal = rateModel2(t,B2,B3,B4,A1,A2,A3,A4,sigma,t0)
-    XPM = ours(t,c1,c2,c3,math.sqrt(2)*sigma,t0)
+    XPM = ours(t,c1,c2,c3,math.sqrt(2)*sigma,t0) # add XPM signal
     return signal + XPM

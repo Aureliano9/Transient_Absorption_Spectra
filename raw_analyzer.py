@@ -19,6 +19,8 @@ from data_object import DataHandler
 
 from scipy.optimize import curve_fit
 
+plt.ion()
+
 # PARAMETERS
 # if supplying pump off/on files
 pump_off_filename = None
