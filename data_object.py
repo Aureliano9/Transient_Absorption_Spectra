@@ -784,11 +784,11 @@ class DataHandler:
     switched_data_ref = False # toggle, whether we switched delta_As and reference_surfaces
     
     # Functions to fit against t0, c1, c2, c3, tau1 for chirp correction
-    t0_func = staticmethod(helpers.second) # quadratic function fit best
-    c1_func = staticmethod(helpers.fifth) # randomly picked fifth
-    c2_func = staticmethod(helpers.fifth) # randomly picked fifth
-    c3_func = staticmethod(helpers.fifth) # randomly picked fifth
-    tau1_func = staticmethod(helpers.fifth) # randomly picked fifth
+    t0_func = staticmethod(helpers.second_poly) # quadratic function fit best
+    c1_func = staticmethod(helpers.fifth_poly) # randomly picked fifth
+    c2_func = staticmethod(helpers.fifth_poly) # randomly picked fifth
+    c3_func = staticmethod(helpers.fifth_poly) # randomly picked fifth
+    tau1_func = staticmethod(helpers.fifth_poly) # randomly picked fifth
     
     c1_popt = None # fitted parameters for c1_popt will be stored here after chirp_correction is called
     c2_popt = None # fitted parameters for c2_func will be stored here after chirp_correction is called
@@ -797,50 +797,92 @@ class DataHandler:
     tau1_popt = None # fitted parameters for tau1_func will be stored here after chirp_correction is called
     
     def __init__(self, delta_A_filenames, ref_surface_filenames):
+        '''
+        Constructer for DataHandler
+        delta_A_filenames should be a list of strings of filenames containing delta A surface
+        ref_surface_filenames should be a list of strings of filenames containing reference surface
+        Both delta A and reference surfaces will be read using DataObject.create_from_file
+        '''
         for filename in delta_A_filenames:
             self.delta_As.append(DataObject.create_from_file(filename))
         for filename in ref_surface_filenames:
             self.reference_surfaces.append(DataObject.create_from_file(filename))
-    def apply(self,is_delta_A, method, kwargs, apply_all=False):
+    def apply(self,is_delta_A, method, kwargs, default=None):
+        '''
+        Applies a specified method by method onto a user-specified delta A surface or reference surface
+        is_delta_A is a boolean indicating if we want to apply to delta A or reference
+        method is a string of a function under DataObject
+        kwargs is a dictionary containing all input parameters for method
+        default is an integer that represents the specific layer that method should be applied
+                       if index is invalid, it will be ignored
+                       if index==-1, method will be applied to all layers
+        
+        if we only have one surface, we will simply apply the method to it (no user prompt)
+        if we have >1 surface and apply_all=True, we will apply the method to all surfaces
+        if we have >1 surface and apply_all=False, we will ask the user to specify a specific layer to apply to
+                                                   if user input is invalid, nothing is performed on data
+                                                   
+        if method returns anything, the same output will be returned by apply                                          
+        '''
         list_of_data = self.delta_As if is_delta_A else self.reference_surfaces
         if len(list_of_data)==1:
             return list_of_data[0].__getattribute__(method)(**kwargs)
         else:
-            specify_index = False if apply_all else helpers.ask_yes_no("Apply only to a specific layer?")
-            if specify_index:
-                display_index = helpers.ask_which_layer(list_of_data)
-                if display_index!=None:
-                    return list_of_data[display_index].__getattribute__(method)(**kwargs)
-            else:
+            if default!=None and default>=0 and default<len(list_of_data):
+                # default specifies index
+                return list_of_data[default].__getattribute__(method)(**kwargs)
+            elif default!=None:
+                print("default has incorrect index hard-coded, check code")
+            
+            apply_all = True if default==-1 else helpers.ask_yes_no("Apply only to a specific layer?")
+            if apply_all:
+                # apply ot all layers if default==-1 or user says they do not want to specify layer
                 output = []
                 for delta_A in list_of_data:
                     output.append(delta_A.__getattribute__(method)(**kwargs))
                 return output
-    def apply_one(self,is_delta_A, method, kwargs,default=None):
-        list_of_data = self.delta_As if is_delta_A else self.reference_surfaces
-        if len(list_of_data)==1:
-            return list_of_data[0].__getattribute__(method)(**kwargs)
-        elif default==None:
-            display_index = helpers.ask_which_layer(list_of_data)
-            if display_index!=None:
-                return list_of_data[display_index].__getattribute__(method)(**kwargs)
-        else:
-            return list_of_data[default].__getattribute__(method)(**kwargs)
+            else:
+                # ask user which layer
+                display_index = helpers.ask_which_layer(list_of_data)
+                if display_index!=None:
+                    return list_of_data[display_index].__getattribute__(method)(**kwargs)
+
     def add_data(self,data_object):
+        '''
+        Add data_object to delta_As
+        '''
         self.delta_As.append(data_object)
     def add_reference(self,data_object):
+        '''
+        Add data_object to reference_surfaces
+        '''
         self.reference_surfaces.append(data_object)
     def switch_data_ref(self):
+        '''
+        switch delta_As and reference_surfaces
+        this allows some functions only for delta_As to be used on reference_surfaces
+        '''
         temp = self.delta_As
         self.delta_As = self.reference_surfaces
         self.reference_surfaces = temp
         self.switched_data_ref = ~self.switched_data_ref
     def write_out_params(name, params):
+        '''
+        write out parameters params into filename with name name
+
+        '''
         f = open(name, "w")
         for wavelength in params:
             f.write(str(wavelength) + "," + str(params[wavelength]) + "\n")
         f.close()
     def fitXPM(self, reference_index, t_range, w_range, skip_plot_prompt=False):
+        '''
+        fit XPM parameters for reference surface at reference_index in reference_surfaces
+        we fit XPM signal for each wavelength independently
+        we will fit within t_range for each wavelength
+        we will only fit wavelengths in the range w_range (we skip the range 410~430 due to its noise)
+
+        '''
         # use this function to fit XPM signal with solvent data
         
         if reference_index<0 or reference_index>=len(self.reference_surfaces):

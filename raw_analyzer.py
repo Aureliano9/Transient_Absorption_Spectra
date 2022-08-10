@@ -78,6 +78,8 @@ menu["bfc"] = "shortcut: background correction, fit ours, chirp correction"
 menu["bfs"] = "shortcut: background correction, fit ours, subtract XPM"
 menu["bf"] = "shortcut: background correction, fit ours"
 
+plt.close('all')
+
 # LIVE INTERACTION
 while True:
     
@@ -108,15 +110,15 @@ while True:
             
     elif action=="wp":
         print("plotting wavelength plot...")
-        data_handler.apply_one(True,"plot_wavelength_crosssection", {})
+        data_handler.apply(True,"plot_wavelength_crosssection", {})
         
     elif action=="tp":
         print("plotting time plot...")
-        data_handler.apply_one(True,"plot_time_crosssection", {})
+        data_handler.apply(True,"plot_time_crosssection", {})
         
     elif action=="cp":
         print("plotting color plot...")
-        data_handler.apply_one(True,"plot_color", {})
+        data_handler.apply(True,"plot_color", {})
         
     elif action=="waxis":
         print("changing wavelength axis...")
@@ -140,11 +142,11 @@ while True:
         
     elif action=="play":
         print("playing with time...")
-        data_handler.apply_one(True,"play_over_time",{})
+        data_handler.apply(True,"play_over_time",{})
         
     elif action=="t peak":
         print("Find peak in given range")
-        peak_time = data_handler.apply_one(True,"find_t_peak",{})
+        peak_time = data_handler.apply(True,"find_t_peak",{})
         print("Peak at time: ", peak_time)
     
     elif action=="add data":
@@ -257,7 +259,7 @@ while True:
         t_min, t_max = helpers.ask_range(float, default=(-1,1.5), add_text="Specify time range to fit")
         
         if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
-            fit_params1 = data_handler.apply_one(True,"fit_rate_model1",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "folder_name": folder_name})
+            fit_params1 = data_handler.apply(True,"fit_rate_model1",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "folder_name": folder_name})
             DataHandler.write_out_params(folder_name+"/params1.txt", fit_params1)
         else:
             print("Improper inputs")
@@ -272,7 +274,7 @@ while True:
         
         if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
             ref = data_handler.reference_surfaces[1]
-            fit_params1 = data_handler.apply_one(True,"fit_rate_model2",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
+            fit_params1 = data_handler.apply(True,"fit_rate_model2",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
             DataHandler.write_out_params(folder_name+"/params2.txt", fit_params1)
         else:
             print("Improper inputs")
@@ -287,7 +289,7 @@ while True:
         
         if w_min!=None and w_max!=None and interval!=None and t_min!=None and t_max!=None:
             ref = data_handler.reference_surfaces[1]
-            fit_params1 = data_handler.apply_one(True,"fit_rate_model3",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
+            fit_params1 = data_handler.apply(True,"fit_rate_model3",{"w_min":w_min,"w_max":w_max,"t_min":t_min,"t_max":t_max,"interval":interval, "ref": ref, "folder_name": folder_name})
             DataHandler.write_out_params(folder_name+"/params3.txt", fit_params1)
             
         else:
@@ -299,21 +301,21 @@ while True:
         
         try:
             #apply background to data and reference
-            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
-            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
+            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
             #apply chirp correction to both data and reference
-            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=0)
+            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=0)
             data_handler.switch_data_ref()
-            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=1)
+            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=1)
             data_handler.switch_data_ref()
             
             #subtract
             surface_to_subtract = data_handler.reference_surfaces[ref_index_default]
-            data_handler.apply_one(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},default=0)
+            data_handler.apply(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},default=0)
             
         except Exception as e:
             print("ERROR: Crashed. check constants defined in code for shortcuts")
@@ -324,8 +326,8 @@ while True:
         
         try:
             #apply background to data and reference
-            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
-            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
+            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
@@ -333,9 +335,9 @@ while True:
             data_handler.delta_As[0].original_signal = data_handler.delta_As[0].signal
             
             #apply chirp correction to both data and reference
-            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=0)
+            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=0)
             data_handler.switch_data_ref()
-            data_handler.apply_one(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=1)
+            data_handler.apply(True,"chirp_correction",{"func": data_handler.t0_func, "popt": data_handler.t0_popt},default=1)
             data_handler.switch_data_ref()
             
         except Exception as e:
@@ -348,15 +350,15 @@ while True:
         
         try:
             #apply background to data and reference
-            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
-            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
+            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)
             
             #subtract
             surface_to_subtract = data_handler.reference_surfaces[ref_index_default]
-            data_handler.apply_one(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},default=0)
+            data_handler.apply(True,"subtract_surface",{"surface_to_subtract": surface_to_subtract, "Es": Es_default, "Er": Er_default, "f": f_default},default=0)
             
         except Exception as e:
             print("ERROR: Crashed. check constants defined in code for shortcuts")
@@ -367,8 +369,8 @@ while True:
         
         try:
             #apply background to data and reference
-            data_handler.apply_one(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
-            data_handler.apply_one(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
+            data_handler.apply(True,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=0)
+            data_handler.apply(False,"background_correction",{"back_min":back_min_default, "back_max":back_max_default},default=1)
             
             #fit XPM
             data_handler.fitXPM(ref_index_default,t_range_default,w_range_default,skip_plot_prompt=True)

@@ -98,26 +98,56 @@ def heaviside(x, shift, magnitude):
 
 def fit_heaviside(x,y):
     '''
-    fit the 
+    fit the heaviside function based on minimum sum of squared differences, provided an axis x and signal y
+    return the index of where the step should be
     '''
-    output_index = 0 #default to zero shift
-    best_loss = float('inf')
+    output_index = 0 # the output index of where the heaviside function jumps (default is 0)
+    best_loss = float('inf') # best loss (minimum sum of squared differences)
     for i in range(1,len(x)):
-        # calculate loss if jump is here (assume jump to MEAN value)
+        # i represents which index the jump could be
+        # calculate loss if jump is at i (assume jump to MEAN value)
         loss = np.sum((y[:i])**2) + np.sum((y[i:]-np.nanmean(y[i:]))**2)
-        if loss<best_loss:
+        
+        if loss<best_loss: # update new best_loss and output_index
             output_index = i
             best_loss = loss
     return output_index
 
-def quadratic(x, a, b, c):
-    return a*x**2 + b*x + c
+def fifth_poly(x, a, b, c, d, e, f):
+    '''
+    return fifth-degree polynomial
+    '''
+    return a + b*x + c*x**2 + d*x**3 + e*x**4 + f*x**5
+
+def fourth_poly(x, a, b, c, d, e):
+    '''
+    return fourth-degree polynomial
+    '''
+    return a + b*x + c*x**2 + d*x**3 + e*x**4
+
+def third_poly(x, a, b, c, d):
+    '''
+    return third-degree polynomial
+    '''
+    return a + b*x + c*x**2 + d*x**3
+
+def second_poly(x, a, b, c):
+    '''
+    return second-degree polynomial
+    '''
+    return a + b*x + c*x**2
+
+def first_poly(x, a, b):
+    '''
+    return first-degree polynomial
+    '''
+    return a + b*x
 
 def fit_quadratic(x,y):
     cleaned_x = x[~np.isnan(y)]
     cleaned_y = y[~np.isnan(y)]
     
-    popt, pcov = curve_fit(quadratic, cleaned_x, cleaned_y)
+    popt, pcov = curve_fit(second_poly, cleaned_x, cleaned_y)
     a = popt[0]
     b = popt[1]
     c = popt[2]
@@ -125,16 +155,11 @@ def fit_quadratic(x,y):
     return (a,b,c)
 
 def chirp_correction(times,wavelengths,delta_A):
+    # shifts will store the t0 based on the hea
     shifts = []
     for i in range(len(wavelengths)):   
         shift = fit_heaviside(times,delta_A[:,i])
         shifts.append(shift)
-        # if i==len(wavelengths)//2:
-        #     plt.figure()
-        #     plt.plot(times,delta_A[:,i])
-        #     plt.title(times[shift])
-        #     plt.xlim(-10,10)
-        #     plt.show()
         
     shifts = np.array(shifts)
     
@@ -152,7 +177,7 @@ def chirp_correction(times,wavelengths,delta_A):
     a,b,c = fit_quadratic(wavelengths[chirp_min_index:chirp_max_index], shifts[chirp_min_index:chirp_max_index])
     
     fitted = np.zeros(len(wavelengths))
-    fitted[chirp_min_index:chirp_max_index] = quadratic(wavelengths[chirp_min_index:chirp_max_index],a,b,c)
+    fitted[chirp_min_index:chirp_max_index] = second_poly(wavelengths[chirp_min_index:chirp_max_index],a,b,c)
     
     plt.figure()
     plt.plot(wavelengths,shifts)
@@ -170,12 +195,14 @@ def chirp_correction(times,wavelengths,delta_A):
 def ask_value(type, label="value", default = None, override_text = None):
     '''
     asks for a single value from user and returns it
+    returns default if invalid input is provided
     '''
     
     if override_text==None:
         value = input("Enter " + label + ": ")
     else:
         value = input(override_text)
+        
     if value=="":
         return default
     else:
@@ -184,6 +211,7 @@ def ask_value(type, label="value", default = None, override_text = None):
 def ask_range(type, default=(None,None), add_text = None):
     '''
     asks for a range from user and returns it as a tuple (min,max)
+    returns default if invalid input is provided
     '''
     
     if add_text!=None:
@@ -223,6 +251,7 @@ def ask_which_layer(list_of_data):
 def ask_yes_no(text, default=False):
     '''
     asks for a boolean from user
+    returns default if invalid input is provided
     '''
     ans = input(text + "(y/n) ")
     if ans=="y":
@@ -279,6 +308,7 @@ def ours(times, c1, c2, c3, tau1, t0):
     return XPM signal function that we wrote out based on Kovalenko's paper
     note: there is another XPM function that Kovalenko writes out explicitly but is not symmetric about center, so we primarily use our XPM signal model currently
     '''
+    ### below are commented out since we take c1,c2,c3,tau1,t0 as fitting parameters, but these are theoretical values/estimates of those values
     # beta = 1.7e-3 * 10**6 # chirp rate [ps^-2]
     # tau1 = 50e-3 #ps  ##???
     # target_wavelength = 400 #### ADJUST
@@ -291,36 +321,6 @@ def ours(times, c1, c2, c3, tau1, t0):
     # c2 = t0/(2*beta)
     # c3 = -1/(4*beta)
     return np.exp(-(times-t0)**2/tau1**2)*(c1-c2*2*(times-t0)/tau1**2-c3*(2/tau1**2-4*(times-t0)**2/tau1**4))
-
-def fifth(x, a, b, c, d, e, f):
-    '''
-    return fifth-degree polynomial
-    '''
-    return a + b*x + c*x**2 + d*x**3 + e*x**4 + f*x**5
-
-def fourth(x, a, b, c, d, e):
-    '''
-    return fourth-degree polynomial
-    '''
-    return a + b*x + c*x**2 + d*x**3 + e*x**4
-
-def third(x, a, b, c, d):
-    '''
-    return third-degree polynomial
-    '''
-    return a + b*x + c*x**2 + d*x**3
-
-def second(x, a, b, c):
-    '''
-    return second-degree polynomial
-    '''
-    return a + b*x + c*x**2
-
-def first(x, a, b):
-    '''
-    return first-degree polynomial
-    '''
-    return a + b*x
 
 def solve_diffeq(t, B2, B3, B4):
     '''
@@ -447,7 +447,7 @@ def rateModel(t, B2, B3, B4, A1, A2, A3, A4, sigma):
 
 def rateModel2(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0):
     '''
-    same as rateModel but the differential equation solution should be shifted by t0
+    same as rateModel but the differential equation solution shifted by t0
 
     '''
     
@@ -500,7 +500,7 @@ def rateModel2(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0):
 
 def rateModel3(t, B2, B3, B4, A1, A2, A3, A4, sigma, t0, c1, c2, c3):
     '''
-    same as rateModel2 but add XPM sigmal with parameters c1, c2, c3
+    same as rateModel2 but add XPM sigmal with parameters c1, c2, c3 on top
 
     '''
     # rate model with no chirp correction and without subtracting XPM
