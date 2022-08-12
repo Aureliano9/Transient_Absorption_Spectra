@@ -356,11 +356,23 @@ def convolve_gaussian(t,x,sigma):
     as our time axis may not be uniform we cannot use FFT, so it will be easier to implement with manual convolution, which is what we do here
     '''
     area = np.trapz(gaussian(t,sigma)) # calculate area of gaussian on entire time axis for normalization
-    output = []
-    for i in range(len(t)):
-        value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area)) # convolve manually
-        output.append(value)
-    return np.array(output)
+    precision = abs(t[0]-t[1]) # assuming t has uniform precision
+    centered_t = np.arange(-(len(t)/2)*precision/2,(len(t)/2)*precision,precision)
+    convolved = np.convolve(x,gaussian(centered_t,sigma),mode='same')/area
+    return convolved
+    
+    # output = []
+    # for i in range(len(t)):
+    #     value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area)) # convolve manually
+    #     output.append(value)
+    
+    # plt.figure()
+    # plt.plot(t,x)
+    # plt.plot(t,convolved)
+    # plt.plot(t,output)
+    # plt.show()
+    
+    # return np.array(output)
 
 def all_convolve_gaussian(t_axis, x1,x2,x3,x4,sigma):
     '''

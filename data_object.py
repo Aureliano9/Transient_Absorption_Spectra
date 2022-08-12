@@ -632,12 +632,12 @@ class DataObject:
                 plt.title("Rate model fitted for " + str(w) + " nm")
                 plt.savefig(folder_name + "/" + str(w) + ".png")
                 plt.show()
+                
+                outputParams[w] = popt
             except Exception as e:
                 print("Could not fit")
                 print(e)
             
-            outputParams[w] = popt
-        
         return outputParams
     
     def fit_rate_model2(self, w_min, w_max, t_min, t_max, interval, ref, folder_name):
