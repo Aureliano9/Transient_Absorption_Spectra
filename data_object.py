@@ -565,9 +565,22 @@ class DataObject:
             current_times = self.times-t0
             current_signal = self.time_traces[w_i].signal
             
+            # store_times = {} # take average in case points are clustered. index to list of values
+            # for t_i in range(len(current_times)):
+            #     time = current_times[t_i]
+            #     new_time_index = helpers.find_index(new_times, time)
+            #     if new_time_index in store_times:
+            #         store_times[new_time_index].append(self.signal[t_i,w_i])
+            #     else:
+            #         store_times[new_time_index] = [self.signal[t_i,w_i]]
+            # new_signal[:, w_i] = np.interp(new_times, current_times, current_signal)
+            # for new_time_index in store_times:
+            #     # take averages of all values close to this time
+            #     new_signal[new_time_index,w_i] = np.nanmean(np.array(store_times[new_time_index]))
+                
             new_signal[:, w_i] = np.interp(new_times, current_times, current_signal)
-            
-            self.time_traces[w_i].shift_time(-t0)
+
+            self.time_traces[w_i].set_times(current_times)
         
         self.times = new_times
         self.signal = new_signal
