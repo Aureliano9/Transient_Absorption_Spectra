@@ -16,6 +16,7 @@ from scipy.optimize import curve_fit
 import os
 from scipy import ndimage
 from scipy import fftpack
+from scipy import signal
 
 
 # return matrix from file
@@ -356,11 +357,16 @@ def convolve_gaussian(t,x,sigma):
     as our time axis may not be uniform we cannot use FFT, so it will be easier to implement with manual convolution, which is what we do here
     '''
     area = np.trapz(gaussian(t,sigma)) # calculate area of gaussian on entire time axis for normalization
+    
+    # FASTER VERSION, has edge error
     precision = abs(t[0]-t[1]) # assuming t has uniform precision
-    centered_t = np.arange(-(len(t)/2)*precision/2,(len(t)/2)*precision,precision)
+    centered_t = np.arange(-(len(t)//2)*precision,(len(t)//2)*precision,precision)
+    if len(centered_t)>len(t):
+        centered_t = centered_t[:len(centered_t)-1]
     convolved = np.convolve(x,gaussian(centered_t,sigma),mode='same')/area
     return convolved
     
+    # # SLOWER VERSION, accurate results
     # output = []
     # for i in range(len(t)):
     #     value = np.sum(x*gaussian(t,sigma,mu=t[i],factor=1/area)) # convolve manually
