@@ -19,20 +19,27 @@ from data_object import DataHandler
 
 from scipy.optimize import curve_fit
 
+
 plt.ion()
 
 # PARAMETERS
-# if supplying pump off/on files
-pump_off_filename = None
-pump_on_filename = None
-# if supplying delta A file
+# supply pump off/on files
+pump_off_filenames = []
+pump_on_filenames = []
+
+# supply delta A files
 delta_A_filenames = ["Data (1)/CudmpDPEphosBF4ACN_1_scan1.csv", "Data (1)/CudmpDPEphosBF4ACN_1_scan2.csv", "Four approaches for XPM treatment/CudmpDPEphosBF4ACN_1_scan1.csv"]  # ["Four approaches for XPM treatment/CudmpDPEphosBF4ACN_1_scan1.csv"] #["sample1/CudmpDPEphosBF4ACN_1_scan2.csv","sample1/CudmpDPEphosBF4ACN_1_scan3.csv","sample1/CudmpDPEphosBF4ACN_1_scan4.csv"]
 ref_surface_filenames = ["Data (1)/Acetonitrile.csv","Data (1)/Acetonitrile2.csv"] # "Four approaches for XPM treatment/Acetonitrile2_scan1.csv", 
 
-if len(delta_A_filenames)==0:
+if len(delta_A_filenames)==0 and len(pump_off_filenames)==0:
     print("Error: No data to read! Change variable delta_A_filenames")
 
 data_handler = DataHandler(delta_A_filenames, ref_surface_filenames)
+
+# my_assert(len(pump_off_filenames)==len(pump_on_filenames)) # pump off/on should be paired
+# for i in range(len(pump_off_filenames)):
+#     new_data_object = DataObject.create_from_file_pump_off_on(pump_off_filenames[i],pump_on_filenames[i])
+#     data_handler.add_data(new_data_object)
 
 # HARDCODE VARIABLES
 back_min_default = -100 # SET
@@ -252,7 +259,7 @@ while True:
         
     elif action=="fit rate model 1":
         print("fitting rate model...")
-        folder_name = "rate model fitting (chirp_corr, subtracted)/model1"
+        folder_name = "rate model fitting (chirp_corr, subtracted)/model1" # folder name of where plots and fitted parameters will be saved
         
         w_min, w_max = helpers.ask_range(float, default=(480,600), add_text="Specify wavelength range to fit")
         interval = helpers.ask_value(float, default=10, label="interval for wavelength")
@@ -265,8 +272,8 @@ while True:
             print("Improper inputs")
     
     elif action=="fit rate model 2":
-        print("fitting rate model...")
-        folder_name = "rate model fitting (chirp_corr, subtracted)/model2"
+        print("fitting rate model 2...")
+        folder_name = "rate model fitting (chirp_corr, subtracted)/model2" # folder name of where plots and fitted parameters will be saved
         
         w_min, w_max = helpers.ask_range(float, default=(490,600), add_text="Specify wavelength range to fit")
         interval = helpers.ask_value(float, default=10, label="interval for wavelength")
@@ -280,8 +287,8 @@ while True:
             print("Improper inputs")
     
     elif action=="fit rate model 3":
-        print("fitting rate model...")
-        folder_name = "rate model fitting (chirp_corr, subtracted)/model3"
+        print("fitting rate model 3...")
+        folder_name = "rate model fitting (chirp_corr, subtracted)/model3" # folder name of where plots and fitted parameters will be saved
         
         w_min, w_max = helpers.ask_range(float, default=(480,600), add_text="Specify wavelength range to fit")
         interval = helpers.ask_value(float, default=10, label="interval for wavelength")

@@ -46,19 +46,13 @@ cdict = {'red': ((0.0, 0.0, 0.0),
 
 my_cmap = matplotlib.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
-def my_assert(condition, msg=None):
-    '''
-    Aborts if condition is false
-    '''
-    if ~condition:
-        print("Assertion false")
-        if msg!=None:
-            print(msg)
-        os.abort()
-        
+
 ############# TIME TRACE ##############
 
 class TimeTrace:
+    # Represents a time spectrum where time axis is times and signal is signal
+    # This time trace is labelled with the wavelength wavelength
+    
     # TimeTrace internal variables
     wavelength = None
     times = np.array([])
@@ -81,8 +75,8 @@ class TimeTrace:
         if TimeTrace conditions are broken, system will abort
 
         '''
-        my_assert(len(self.times)==len(self.signal), "Time trace time and signal do not have the same dimensions")
-        my_assert(self.wavelength!=None and self.wavelength>=0, "Wavelength value is none or negative")
+        assert len(self.times)==len(self.signal), "Time trace time and signal do not have the same dimensions"
+        assert self.wavelength!=None and self.wavelength>=0, "Wavelength value is none or negative"
         
     def get_wavelength(self):
         '''
@@ -121,18 +115,23 @@ class TimeTrace:
 ############# DATA OBJECT ##############
 
 class DataObject:
+    # Represents a 2D surface (delta_A or reference)
+    # where the signal spans across wavelengths and times
+    # The user has different viewing options, which is kept track with a cursor pointing at current_w/current_t
+    # and has restricted axes bounds w_bounds/t_bounds/c_bounds
+    
     # DataObject internal variables
     name = ""
-    signal = np.array([])
-    times = np.array([])
-    wavelengths = np.array([])
-    time_traces = []
-    current_w = None
-    current_t = None
-    w_bounds = (None,None)
-    t_bounds = (None,None)
-    c_bounds = (None,None)
-    chirp_corrected = False
+    signal = np.array([]) # 2D array that contains signal (time vs wavelengths), will be interpolated values if chirp_corrected
+    times = np.array([]) # time axes corresponding to signal
+    wavelengths = np.array([]) # wavelength axes corresponding to wavelengths
+    time_traces = [] # list of TimeTrace s.t. we can store the exact time axes for each wavelength after chirp correction
+    current_w = None # cursor of current wavelength. if we ask for a time plot, it will plot it for this wavelength value
+    current_t = None # cursor of current time. if we ask for a wavelength plot, it will plot it for this time value
+    w_bounds = (None,None) # wavelength axes bounds. if we ask for 2D plot or wavelength plot, it will only plot within these values
+    t_bounds = (None,None) # time axes bounds. if we ask for 2D plot or time plot, it will only plot within these values
+    c_bounds = (None,None) # color bounds. if we ask for 2D plot, it will use a color axes with these bound values
+    chirp_corrected = False # toggled on if we do chirp correction
     
     def reset_time_traces(self):
         '''
@@ -187,6 +186,15 @@ class DataObject:
         '''
         wavelengths_in, times_in, signal_in = helpers.read_file(filename)
         return DataObject(wavelengths_in, times_in, signal_in,filename)
+    
+    def create_from_file_pump_off_on(off_filename, on_filename):
+        wavelengths_off, times_off, signal_off = helpers.read_file(off_filename)
+        wavelengths_on, times_on, signal_on = helpers.read_file(on_filename)
+        signal = np.log(signal_off/signal_on)
+        assert np.isclose(wavelengths_off,wavelengths_on)
+        assert np.isclose(times_off,times_on)
+        return DataObject(wavelengths_off, times_off, signal, on_filename)
+    
     def average(datas):
         '''
         create the average across the list of datas
@@ -777,6 +785,10 @@ class DataObject:
 
 class DataHandler:
     
+    # keeps track of multiple delta A surfaces and reference surfaces
+    # applies specified method onto these surfaces (either just one surface or all)
+    # can do XPM fitting on reference data surface, which stores the fitted parameters that can be used for chirp correction
+    
     # Data Handler internal variables
     delta_As = [] # list of DataObjects that represent delta_As
     reference_surfaces = [] # list of DataObjects that represent reference surfaces
@@ -846,7 +858,6 @@ class DataHandler:
                 display_index = helpers.ask_which_layer(list_of_data)
                 if display_index!=None:
                     return list_of_data[display_index].__getattribute__(method)(**kwargs)
-
     def add_data(self,data_object):
         '''
         Add data_object to delta_As
@@ -882,12 +893,18 @@ class DataHandler:
         we will fit within t_range for each wavelength
         we will only fit wavelengths in the range w_range (we skip the range 410~430 due to its noise)
 
+        
+
+        fitted parameters will be saved internally
+        if skip_plot_prompt is true, user will be prompted whether they want to plot all wavelengths with their XPM fit
+        at the end, the fitted parameters will be plotted against wavelengths
         '''
         # use this function to fit XPM signal with solvent data
         
         if reference_index<0 or reference_index>=len(self.reference_surfaces):
             print("Error: reference index is not in range")
             return
+        assert self.switched_data_ref==False, "Need to switch back data and ref to do XPM fitting"
         
         ref = self.reference_surfaces[reference_index]
             
@@ -939,7 +956,7 @@ class DataHandler:
                 # try to fit
                 popt, pcov = curve_fit(helpers.ours, sliced_times, sliced_signal, [initial_c1, initial_c2, initial_c3, tau1, t0])
                 pcov_mag = np.linalg.norm(np.array(pcov)) # represents error
-                if pcov_mag > .01:
+                if pcov_mag > .01: # threshold is set arbitrarily to .01 right now
                     # throw away the fit if it is too large
                     raise RuntimeError() 
                 
