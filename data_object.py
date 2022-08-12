@@ -859,7 +859,7 @@ class DataHandler:
             elif default!=None:
                 print("default has incorrect index hard-coded, check code")
             
-            apply_all = True if default==-1 else helpers.ask_yes_no("Apply only to a specific layer?")
+            apply_all = True if default==-1 else helpers.ask_yes_no("Apply all?")
             if apply_all:
                 # apply ot all layers if default==-1 or user says they do not want to specify layer
                 output = []
